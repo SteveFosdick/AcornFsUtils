@@ -1,0 +1,5 @@
+*.o
+afsls
+afstree
+afscp
+adfs-utils.geany
