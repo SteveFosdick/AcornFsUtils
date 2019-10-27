@@ -39,11 +39,11 @@ typedef struct {
 
 typedef struct acorn_fs acorn_fs;
 
-typedef int (*acorn_fs_cb)(acorn_fs *fs, acorn_fs_object *obj, void *udata, unsigned depth);
+typedef int (*acorn_fs_cb)(acorn_fs *fs, acorn_fs_object *obj, void *udata, const char *path);
 
 struct acorn_fs {
     int (*find)(acorn_fs *fs, const char *adfs_name, acorn_fs_object *obj);
-    int (*glob)(acorn_fs *fs, const char *pattern, acorn_fs_cb cb, void *udata);
+    int (*glob)(acorn_fs *fs, acorn_fs_object *start, const char *pattern, acorn_fs_cb cb, void *udata);
     int (*walk)(acorn_fs *fs, acorn_fs_object *start, acorn_fs_cb cb, void *udata);
     int (*load)(acorn_fs *fs, acorn_fs_object *obj);
     int (*save)(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest);

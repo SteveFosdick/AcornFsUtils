@@ -156,44 +156,40 @@ int acorn_adfs_find(acorn_fs *fs, const char *adfs_name, acorn_fs_object *obj)
     return status;
 }
 
-static int glob_dir(acorn_fs *fs, const char *pattern, acorn_fs_cb cb, void *udata, acorn_fs_object *dir, unsigned pat_len, unsigned depth)
+static int glob_dir(acorn_fs *fs, acorn_fs_object *dir, const char *pattern, acorn_fs_cb cb, void *udata, char *path, unsigned path_posn)
 {
+    if (!*pattern)
+        return AFS_OK;
     int status = acorn_adfs_load(fs, dir);
     if (status == AFS_OK) {
         if ((status = check_dir(dir)) == AFS_OK) {
             unsigned char *ent = dir->data;
             unsigned char *end = ent + dir->length - DIR_FTR_SIZE;
-            if (!pat_len) {
-                for (ent += DIR_HDR_SIZE; ent < end; ent += DIR_ENT_SIZE) {
-                    if (!*ent)
-                        break;
+            char *sep = strchr(pattern, '.');
+            unsigned mat_len = sep ? sep - pattern + 1 : strlen(pattern);
+            for (ent += DIR_HDR_SIZE; ent < end; ent += DIR_ENT_SIZE) {
+                if (!*ent)
+                    break;
+                int i = acorn_fs_wildmat(pattern, ent, mat_len);
+                if (i < 0)
+                    break;
+                if (i == 0) {
                     acorn_fs_object obj;
-                    ent2obj(ent, &obj);
-                    status = cb(fs, &obj, udata, depth);
-                }
-            }
-            else {
-                char *sep = memchr(pattern, '.', pat_len);
-                unsigned mat_len = sep ? sep - pattern + 1 : pat_len;
-                for (ent += DIR_HDR_SIZE; ent < end; ent += DIR_ENT_SIZE) {
-                    if (!*ent)
+                    unsigned copy_len = ent2obj(ent, &obj) + 1;
+                    unsigned new_posn = path_posn + copy_len;
+                    if (new_posn >= ACORN_FS_MAX_PATH) {
+                        status = ENAMETOOLONG;
                         break;
-                    int i = acorn_fs_wildmat(pattern, ent, mat_len);
-                    if (i < 0)
-                        break;
-                    if (i == 0) {
-                        acorn_fs_object obj;
-                        if (obj.is_dir) {
-                            if (sep)
-                                status = glob_dir(fs, sep+1, cb, udata, &obj, pat_len-(sep-pattern)-1, depth+1);
-                            else
-                                status = glob_dir(fs, "", cb, udata, &obj, 0, depth+1);
-                        }
-                        else
-                            status = cb(fs, &obj, udata, depth);
-                        if (status != AFS_OK)
-                            break;
                     }
+                    memcpy(path + path_posn, obj.name, copy_len);
+                    if (obj.is_dir && sep) {
+                        path[new_posn-1] = '.';
+                        status = glob_dir(fs, &obj, sep+1, cb, udata, path, new_posn);
+                    }
+                    else
+                        status = cb(fs, &obj, udata, path);
+                    if (status != AFS_OK)
+                        break;
                 }
             }
         }
@@ -202,24 +198,21 @@ static int glob_dir(acorn_fs *fs, const char *pattern, acorn_fs_cb cb, void *uda
     return status;
 }
 
-int acorn_adfs_glob(acorn_fs *fs, const char *pattern, acorn_fs_cb cb, void *udata)
+int acorn_adfs_glob(acorn_fs *fs, acorn_fs_object *start, const char *pattern, acorn_fs_cb cb, void *udata)
 {
-    unsigned pat_len = strlen(pattern);
-    acorn_fs_object root;
-
-    make_root(&root);
-    if (pattern[0] == '$') {
-        if (!pattern[1])
-            return AFS_OK;
-        else if (pattern[1] == '.') {
+    char path[ACORN_FS_MAX_PATH];
+    if (start)
+        return glob_dir(fs, start, pattern, cb, udata, path, 0);
+    else {
+        acorn_fs_object root;
+        make_root(&root);
+        if (pattern[0] == '$' && pattern[1] == '.')
             pattern += 2;
-            pat_len -= 2;
-        }
+        return glob_dir(fs, &root, pattern, cb, udata, path, 0);
     }
-    return glob_dir(fs, pattern, cb, udata, &root, pat_len, 0);
 }
 
-static int walk_dir(acorn_fs *fs, acorn_fs_object *dir, acorn_fs_cb cb, void *udata, int depth)
+static int walk_dir(acorn_fs *fs, acorn_fs_object *dir, acorn_fs_cb cb, void *udata, char *path, unsigned path_posn)
 {
     int status = acorn_adfs_load(fs, dir);
     if (status == AFS_OK) {
@@ -230,12 +223,20 @@ static int walk_dir(acorn_fs *fs, acorn_fs_object *dir, acorn_fs_cb cb, void *ud
                 acorn_fs_object obj;
                 if (!*ent)
                     break;
-                ent2obj(ent, &obj);
-                if ((status = cb(fs, &obj, udata, depth)) != AFS_OK)
+                unsigned copy_len = ent2obj(ent, &obj) + 1;
+                unsigned new_posn = path_posn + copy_len;
+                if (new_posn >= ACORN_FS_MAX_PATH) {
+                    status = ENAMETOOLONG;
                     break;
-                if (obj.is_dir)
-                    if ((status = walk_dir(fs, &obj, cb, udata, depth+1)) != AFS_OK)
+                }
+                memcpy(path + path_posn, obj.name, copy_len);
+                if ((status = cb(fs, &obj, udata, path)) != AFS_OK)
+                    break;
+                if (obj.is_dir) {
+                    path[new_posn-1] = '.';
+                    if ((status = walk_dir(fs, &obj, cb, udata, path, new_posn)) != AFS_OK)
                         break;
+                }
             }
         }
         acorn_fs_free_obj(dir);
@@ -245,12 +246,13 @@ static int walk_dir(acorn_fs *fs, acorn_fs_object *dir, acorn_fs_cb cb, void *ud
 
 int acorn_adfs_walk(acorn_fs *fs, acorn_fs_object *start, acorn_fs_cb cb, void *udata)
 {
+    char path[ACORN_FS_MAX_PATH];
     if (start)
-        return walk_dir(fs, start, cb, udata, 0);
+        return walk_dir(fs, start, cb, udata, path, 0);
     else {
         acorn_fs_object root;
         make_root(&root);
-        return walk_dir(fs, &root, cb, udata, 0);
+        return walk_dir(fs, &root, cb, udata, path, 0);
     }
 }
 
