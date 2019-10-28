@@ -122,6 +122,7 @@ static void setup_adfs(acorn_fs *fs, FILE *fp, const char *filename)
     fs->load = acorn_adfs_load;
     fs->save = acorn_adfs_save;
     fs->fp = fp;
+    fs->priv = NULL;
     strcpy(fs->filename, filename);
     fs->next = open_list;
     open_list = fs;
@@ -204,7 +205,6 @@ int acorn_fs_close_all(void)
         int result = close_fs(ent);
         if (result != AFS_OK)
             status = result;
-        free(ent);
         ent = next;
     }
     open_list = NULL;
