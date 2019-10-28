@@ -33,6 +33,7 @@ int main(int argc, char *argv[])
                     fprintf(stderr, "afstree: %s: %s\n", fsname, acorn_fs_strerr(errno));
                     status++;
                 }
+                acorn_fs_close_all();
             }
             else {
                 fprintf(stderr, "afstree: unable to open filesystem '%s': %s\n", fsname, acorn_fs_strerr(errno));

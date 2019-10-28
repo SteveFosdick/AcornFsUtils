@@ -26,6 +26,7 @@ int main(int argc, char *argv[])
                     fprintf(stderr, "afsls: %s: %s\n", fsname, acorn_fs_strerr(astat));
                     status++;
                 }
+                acorn_fs_close_all();
             }
             else {
                 fprintf(stderr, "afsls: %s: %s\n", fsname, acorn_fs_strerr(errno));
