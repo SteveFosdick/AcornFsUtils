@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
             if (sep)
                 *sep++ = 0;
             if ((fs = acorn_fs_open(fsname, false))) {
-                int astat = fs->glob(fs, NULL, sep ? sep : "*", callback, NULL);
+                int astat = fs->glob(fs, NULL, sep && *sep ? sep : "*", callback, NULL);
                 if (astat != AFS_OK) {
                     fprintf(stderr, "afsls: %s: %s\n", fsname, acorn_fs_strerr(astat));
                     status++;
