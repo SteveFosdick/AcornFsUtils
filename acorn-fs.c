@@ -234,16 +234,17 @@ const char *acorn_fs_strerr(int status)
     }
 }
 
-int acorn_fs_wildmat(const char *pattern, const unsigned char *candidate, size_t len)
+int acorn_fs_wildmat(const char *pattern, const unsigned char *candidate, size_t len, bool is_dir)
 {
     while (len-- > 0) {
         int pat_ch = *(const unsigned char *)pattern++;
         if (pat_ch == '*') {
-            if (!*pattern)
+            pat_ch = *pattern;
+            if (!pat_ch || (pat_ch == '.' && is_dir))
                 return 0;
             int can_ch = *candidate & 0x7f;
             while (can_ch && can_ch != 0x0d) {
-                if (!acorn_fs_wildmat(pattern, candidate++, len))
+                if (!acorn_fs_wildmat(pattern, candidate++, len, is_dir))
                     return 0;
                 can_ch = *candidate & 0x7f;
             }

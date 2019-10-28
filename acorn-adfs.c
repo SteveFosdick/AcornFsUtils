@@ -104,7 +104,8 @@ static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child,
                     *ent_ptr = ent;
                     return ENOENT;
                 }
-                int i = acorn_fs_wildmat(name, ent, name_len);
+                bool is_dir = ent[3] & 0x80;
+                int i = acorn_fs_wildmat(name, ent, name_len, is_dir);
                 if (i < 0) {
                     *ent_ptr = ent;
                     return ENOENT;
@@ -170,7 +171,8 @@ static int glob_dir(acorn_fs *fs, acorn_fs_object *dir, const char *pattern, aco
             for (ent += DIR_HDR_SIZE; ent < end; ent += DIR_ENT_SIZE) {
                 if (!*ent)
                     break;
-                int i = acorn_fs_wildmat(pattern, ent, mat_len);
+                bool is_dir = ent[3] & 0x80;
+                int i = acorn_fs_wildmat(pattern, ent, mat_len, is_dir);
                 if (i < 0)
                     break;
                 if (i == 0) {
