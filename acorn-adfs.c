@@ -1,3 +1,4 @@
+#include "acorn-fs.h"
 #include "acorn-adfs.h"
 #include <stdlib.h>
 #include <string.h>
@@ -36,7 +37,7 @@ static inline void adfs_put24(unsigned char *base, uint32_t value)
 static void make_root(acorn_fs_object *obj)
 {
     memset(obj, 0, sizeof(acorn_fs_object));
-    obj->is_dir = 1;
+    obj->attr = AFS_ATTR_DIR;
     obj->length = 1280;
     obj->sector = 2;
 }
@@ -70,21 +71,22 @@ static int ent2obj(unsigned char *ent, acorn_fs_object *obj)
             break;
         obj->name[i] = c;
     }
-    obj->name[i]    = '\0';
-    obj->user_read  = ((ent[0] & 0x80) == 0x80);
-    obj->user_write = ((ent[1] & 0x80) == 0x80);
-    obj->locked     = ((ent[2] & 0x80) == 0x80);
-    obj->is_dir     = ((ent[3] & 0x80) == 0x80);
-    obj->user_exec  = ((ent[4] & 0x80) == 0x80);
-    obj->pub_read   = ((ent[5] & 0x80) == 0x80);
-    obj->pub_write  = ((ent[6] & 0x80) == 0x80);
-    obj->pub_exec   = ((ent[7] & 0x80) == 0x80);
-    obj->pub_exec   = ((ent[8] & 0x80) == 0x80);
-    obj->priv       = ((ent[9] & 0x80) == 0x80);
-    obj->load_addr  = adfs_get32(ent + 0x0a);
-    obj->exec_addr  = adfs_get32(ent + 0x0e);
-    obj->length     = adfs_get32(ent + 0x12);
-    obj->sector     = adfs_get24(ent + 0x16);
+    obj->name[i] = '\0';
+    unsigned a = 0;
+    if (ent[0] & 0x80) a |= AFS_ATTR_UREAD;
+    if (ent[1] & 0x80) a |= AFS_ATTR_UWRITE;
+    if (ent[2] & 0x80) a |= AFS_ATTR_LOCKED;
+    if (ent[3] & 0x80) a |= AFS_ATTR_DIR;
+    if (ent[4] & 0x80) a |= AFS_ATTR_UEXEC;
+    if (ent[5] & 0x80) a |= AFS_ATTR_OREAD;
+    if (ent[6] & 0x80) a |= AFS_ATTR_OWRITE;
+    if (ent[7] & 0x80) a |= AFS_ATTR_OEXEC;
+    if (ent[8] & 0x80) a |= AFS_ATTR_PRIV;
+    obj->attr      = a;
+    obj->load_addr = adfs_get32(ent + 0x0a);
+    obj->exec_addr = adfs_get32(ent + 0x0e);
+    obj->length    = adfs_get32(ent + 0x12);
+    obj->sector    = adfs_get24(ent + 0x16);
     return i;
 }
 
@@ -92,7 +94,7 @@ static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child,
 {
     if (name_len > ADFS_MAX_NAME)
         return ENAMETOOLONG;
-    if (!parent->is_dir)
+    if (!(parent->attr & AFS_ATTR_DIR))
         return ENOTDIR;
     int status = acorn_adfs_load(fs, parent);
     if (status == AFS_OK) {
@@ -184,7 +186,7 @@ static int glob_dir(acorn_fs *fs, acorn_fs_object *dir, const char *pattern, aco
                         break;
                     }
                     memcpy(path + path_posn, obj.name, copy_len);
-                    if (obj.is_dir && sep) {
+                    if (is_dir && sep) {
                         path[new_posn-1] = '.';
                         status = glob_dir(fs, &obj, sep+1, cb, udata, path, new_posn);
                     }
@@ -234,7 +236,7 @@ static int walk_dir(acorn_fs *fs, acorn_fs_object *dir, acorn_fs_cb cb, void *ud
                 memcpy(path + path_posn, obj.name, copy_len);
                 if ((status = cb(fs, &obj, udata, path)) != AFS_OK)
                     break;
-                if (obj.is_dir) {
+                if (obj.attr & AFS_ATTR_DIR) {
                     path[new_posn-1] = '.';
                     if ((status = walk_dir(fs, &obj, cb, udata, path, new_posn)) != AFS_OK)
                         break;
@@ -383,16 +385,16 @@ static int dir_update(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *ch
         if (ch == 0)
             break;
     }
-    if (child->user_read)  ent[0] |= 0x80;
-    if (child->user_write) ent[1] |= 0x80;
-    if (child->locked)     ent[2] |= 0x80;
-    if (child->is_dir)     ent[3] |= 0x80;
-    if (child->user_exec)  ent[4] |= 0x80;
-    if (child->pub_read)   ent[5] |= 0x80;
-    if (child->pub_write)  ent[6] |= 0x80;
-    if (child->pub_exec)   ent[7] |= 0x80;
-    if (child->pub_exec)   ent[8] |= 0x80;
-    if (child->priv)       ent[9] |= 0x80;
+    unsigned a = child->attr;
+    if (a & AFS_ATTR_UREAD)  ent[0] |= 0x80;
+    if (a & AFS_ATTR_UWRITE) ent[1] |= 0x80;
+    if (a & AFS_ATTR_LOCKED) ent[2] |= 0x80;
+    if (a & AFS_ATTR_DIR)    ent[3] |= 0x80;
+    if (a & AFS_ATTR_UEXEC)  ent[4] |= 0x80;
+    if (a & AFS_ATTR_OREAD)  ent[5] |= 0x80;
+    if (a & AFS_ATTR_OWRITE) ent[6] |= 0x80;
+    if (a & AFS_ATTR_OEXEC)  ent[7] |= 0x80;
+    if (a & AFS_ATTR_PRIV)   ent[8] |= 0x80;
     adfs_put24(ent + 0x0a, child->load_addr);
     adfs_put24(ent + 0x0e, child->exec_addr);
     adfs_put24(ent + 0x12, child->length);
@@ -413,7 +415,7 @@ int acorn_adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
     acorn_fs_object parent, child;
     unsigned char *ent;
 
-    if (!dest->is_dir)
+    if (!(dest->attr & AFS_ATTR_DIR))
         status = ENOTDIR;
     else if ((status = load_fsmap(fs)) == AFS_OK) {
         if ((status = search(fs, dest, &child, obj->name, strlen(obj->name), &ent)) == AFS_OK) {

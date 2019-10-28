@@ -19,20 +19,22 @@
 #define AFS_MAP_FULL   -6
 #define AFS_DIR_FULL   -7
 
+#define AFS_ATTR_UREAD  0x0001
+#define AFS_ATTR_UWRITE 0x0002
+#define AFS_ATTR_UEXEC  0x0004
+#define AFS_ATTR_LOCKED 0x0008
+#define AFS_ATTR_OREAD  0x0010
+#define AFS_ATTR_OWRITE 0x0020
+#define AFS_ATTR_OEXEC  0x0040
+#define AFS_ATTR_PRIV   0x0080
+#define AFS_ATTR_DIR    0x0100
+
 typedef struct {
     char          name[ACORN_FS_MAX_NAME+1];
-    unsigned      user_read:1;
-    unsigned      user_write:1;
-    unsigned      locked:1;
-    unsigned      is_dir:1;
-    unsigned      user_exec:1;
-    unsigned      pub_read:1;
-    unsigned      pub_write:1;
-    unsigned      pub_exec:1;
-    unsigned      priv:1;
     unsigned      load_addr;
     unsigned      exec_addr;
     unsigned      length;
+    unsigned      attr;
     unsigned      sector;
     unsigned char *data;
 } acorn_fs_object;

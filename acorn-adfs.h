@@ -1,8 +1,6 @@
 #ifndef ACORN_ADFS_INC
 #define ACORN_ADFS_INC
 
-#include "acorn-fs.h"
-
 #define ADFS_MAX_NAME 10
 
 extern int acorn_adfs_find(acorn_fs *fs, const char *adfs_name, acorn_fs_object *obj);

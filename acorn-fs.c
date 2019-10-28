@@ -279,16 +279,17 @@ void acorn_fs_free_obj(acorn_fs_object *obj)
 
 int acorn_fs_info(acorn_fs_object *obj, FILE *fp)
 {
-    char attr[9];
-    memset(attr, '-', 9);
-    if (obj->user_read)  attr[2] = 'R';
-    if (obj->user_write) attr[3] = 'W';
-    if (obj->locked)     attr[1] = 'L';
-    if (obj->is_dir)     attr[0] = 'D';
-    if (obj->user_exec)  attr[4] = 'E';
-    if (obj->pub_read)   attr[5] = 'r';
-    if (obj->pub_write)  attr[6] = 'w';
-    if (obj->pub_exec)   attr[7] = 'e';
-    if (obj->priv)       attr[8] = 'P';
-    return fprintf(fp, "%.9s %08X %08X %'10d %06X", attr, obj->load_addr, obj->exec_addr, obj->length, obj->sector);
+    char str[9];
+    memset(str, '-', 9);
+    unsigned a = obj->attr;
+    if (a & AFS_ATTR_DIR)    str[0] = 'D';
+    if (a & AFS_ATTR_LOCKED) str[1] = 'L';
+    if (a & AFS_ATTR_UREAD)  str[2] = 'R';
+    if (a & AFS_ATTR_UWRITE) str[3] = 'W';
+    if (a & AFS_ATTR_UEXEC)  str[4] = 'E';
+    if (a & AFS_ATTR_OREAD)  str[5] = 'r';
+    if (a & AFS_ATTR_OWRITE) str[6] = 'w';
+    if (a & AFS_ATTR_OEXEC)  str[7] = 'e';
+    if (a & AFS_ATTR_PRIV)   str[8] = 'P';
+    return fprintf(fp, "%.9s %08X %08X %'10d %06X", str, obj->load_addr, obj->exec_addr, obj->length, obj->sector);
 }
