@@ -253,7 +253,7 @@ int acorn_fs_wildmat(const char *pattern, const unsigned char *candidate, size_t
         else {
             int can_ch = *candidate++ & 0x7f;
             if (!can_ch || can_ch == 0x0d)
-                return 1;
+                return pat_ch == '.' ? 0 : 1;
             if (pat_ch != '#') {
                 if (pat_ch >= 'a' && pat_ch <= 'z')
                     pat_ch = pat_ch - 'a' + 'A';
