@@ -6,6 +6,17 @@
 #include <locale.h>
 #include <sys/stat.h>
 
+typedef struct {
+    const char      *src_fsname;
+    acorn_fs        *dst_fs;
+    const char      *dst_fsname;
+    acorn_fs_object *dst_obj;
+    const char      *dst_objname;
+    bool            dst_isdir;
+} acorn_ctx;
+
+typedef int (*native_cb)(const char *src, void *dest);
+
 /*
  * Translate non-BBC filename characters to BBC ones according to
  * the table at http://beebwiki.mdfs.net/Filename_character_mapping
@@ -172,17 +183,121 @@ static int native_save(acorn_fs_object *obj, const char *filename)
     return status;
 }
 
-static int file_a2n(acorn_fs *fs, acorn_fs_object *obj, void *udata, const char *path)
+static int save_file(acorn_fs_object *obj, acorn_ctx *ctx)
 {
-    int status = fs->load(fs, obj);
-    if (status == AFS_OK) {
-        char *dest = (char *)udata;
-        size_t len = strlen(dest);
-        char *name = alloca(len + ACORN_FS_MAX_NAME + 2);
-        memcpy(name, dest, len);
-        name[len++] = '/';
-        name_a2n(obj->name, name+len);
+    int status;
+    if (ctx->dst_fs) {
+        // Acorn destination.
+        status = ctx->dst_fs->save(ctx->dst_fs, obj, ctx->dst_obj);
+        if (status != AFS_OK) {
+            if (ctx->dst_isdir)
+                fprintf(stderr, "afscp: %s:%s.%s: %s\n", ctx->dst_fsname, ctx->dst_objname, obj->name, acorn_fs_strerr(status));
+            else
+                fprintf(stderr, "afscp: %s:%s: %s\n", ctx->dst_fsname, ctx->dst_objname, acorn_fs_strerr(status));
+        }
+    }
+    else {
+        // Native destination.
+        const char *name = ctx->dst_objname;
+        if (ctx->dst_isdir) {
+            size_t len = strlen(ctx->dst_objname);
+            char *path = alloca(len + ACORN_FS_MAX_NAME + 2);
+            memcpy(path, ctx->dst_objname, len);
+            path[len++] = '/';
+            name_a2n(obj->name, path+len);
+            name = path;
+        }
         status = native_save(obj, name);
+    }
+    return status;
+}
+
+static int acorn_src(acorn_fs *fs, acorn_fs_object *obj, void *udata, const char *path)
+{
+    acorn_ctx *ctx = udata;
+    if (obj->attr & AFS_ATTR_DIR) {
+        fprintf(stderr, "afscp: skipping directory %s:%s\n", ctx->src_fsname, path);
+        return AFS_OK;
+    }
+    int status = fs->load(fs, obj);
+    if (status == AFS_OK)
+        status = save_file(obj, ctx);
+    return status;
+}
+
+static int copy_loop(int argc, char **argv, acorn_ctx *ctx)
+{
+    int status = 9;
+    for (argc -= 2; argc; argc--) {
+        int astat;
+        char *item = *++argv;
+        char *sep = strchr(item, ':');
+        if (sep) {
+            *sep++ = 0;
+            acorn_fs *fs = acorn_fs_open(item, false);
+            if (fs) {
+                ctx->src_fsname = item;
+                astat = fs->glob(fs, NULL, sep, acorn_src, ctx);
+            }
+        }
+        else {
+            struct stat stb;
+            if (!stat(item, &stb)) {
+                if (S_ISDIR(stb.st_mode))
+                    fprintf(stderr, "afscp: skipping directory %s\n", item);
+                else {
+                    acorn_fs_object obj;
+                    astat = native_load(&obj, item);
+                    if (astat == AFS_OK)
+                        astat = save_file(&obj, ctx);
+                }
+            }
+            else {
+                astat = errno;
+                fprintf(stderr, "afscp: %s: %s\n", item, strerror(astat));
+            }
+        }
+        if (astat != AFS_OK)
+            status++;
+    }
+    return status;
+}
+
+static int acorn_dest(int argc, char **argv, const char *fsname, char *dest)
+{
+    int status;
+    *dest++ = 0;
+    acorn_fs *fs = acorn_fs_open(fsname, true);
+    if (fs) {
+        if (!*dest)
+            dest = "$";
+        acorn_fs_object dobj;
+        acorn_ctx ctx;
+        ctx.dst_fs = fs;
+        ctx.dst_fsname = fsname;
+        ctx.dst_obj = &dobj;
+        ctx.dst_objname = dest;
+        status = fs->find(fs, dest, &dobj);
+        if (status == AFS_OK && dobj.attr & AFS_ATTR_DIR) {
+            ctx.dst_isdir = true;
+            status = copy_loop(argc, argv, &ctx);
+        }
+        else if ((status == AFS_OK || status == ENOENT) && argc == 3) {
+            ctx.dst_isdir = false;
+            status = copy_loop(argc, argv, &ctx);
+        }
+        else if (status == ENOENT) {
+            fputs("afscp: destination must be a directory for multi-file copy\n", stderr);
+            status = 3;
+        }
+        else {
+            fprintf(stderr, "afscp: %s:%s: %s\n", fsname, dest, acorn_fs_strerr(status));
+            status = 2;
+        }
+    }
+    else {
+        fprintf(stderr, "afscp: %s: %s\n", dest, acorn_fs_strerr(errno));
+        status = 2;
     }
     return status;
 }
@@ -195,62 +310,26 @@ static bool is_acorn_wild(const char *name)
     return 0;
 }
 
-static int acorn_dest(int argc, char **argv, const char *fsname, char *dest)
-{
-    int status;
-    *dest++ = 0;
-    acorn_fs *fs = acorn_fs_open(fsname, true);
-    if (fs) {
-        if (!*dest)
-            dest = "$";
-        acorn_fs_object dobj;
-        int astat = fs->find(fs, dest, &dobj);
-        if (astat == AFS_OK) {
-            if (dobj.attr & AFS_ATTR_DIR || (argc == 2 && !is_acorn_wild(argv[1]))) {
-            }
-            else {
-                fputs("afscp: destination must be a directory for multi-file copy\n", stderr);
-                status = 3;
-            }
-        }
-        else {
-            fprintf(stderr, "afscp: %s: %s\n", dest, acorn_fs_strerr(errno));
-            status = 2;
-        }
-    }
-    else {
-        fprintf(stderr, "afscp: %s: %s\n", dest, acorn_fs_strerr(errno));
-        status = 2;
-    }
-    return status;
-}
-
 static int native_dest(int argc, char **argv, const char *dest)
 {
-    int status;
+    acorn_ctx ctx;
+    ctx.dst_fs = NULL;
+    ctx.dst_fsname = NULL;
+    ctx.dst_obj = NULL;
+    ctx.dst_objname = dest;
     struct stat stb;
-    if (!stat(dest, &stb)) {
-        if (S_ISDIR(stb.st_mode) || (argc == 2 && !is_acorn_wild(argv[1]))) {
-            for (argc -= 2; argc; argc--) {
-                char *item = *++argv;
-                char *sep = strchr(item, ':');
-                if (sep) {
-                    *sep++ = 0;
-                    acorn_fs *fs = acorn_fs_open(item, false);
-                    if (fs)
-                        status = fs->glob(fs, NULL, sep, file_a2n, (void *)dest);
-                }
-                else {
-                    acorn_fs_object obj;
-                    if ((status = native_load(&obj, item)) == AFS_OK)
-                        status = native_save(&obj, item);
-                }
-            }
-        }
-        else {
-            fputs("afscp: destination must be a directory for multi-file copy\n", stderr);
-            status = 3;
-        }
+    int status = stat(dest, &stb);
+    if (!status && S_ISDIR(stb.st_mode)) {
+        ctx.dst_isdir = true;
+        status = copy_loop(argc, argv, &ctx);
+    }
+    else if ((!status || errno == ENOENT) && argc == 3 && !is_acorn_wild(argv[1])) {
+        ctx.dst_isdir = false;
+        status = copy_loop(argc, argv, &ctx);
+    }
+    else if (!status) {
+        fputs("afscp: destination must be a directory for multi-file copy\n", stderr);
+        status = 3;
     }
     else {
         fprintf(stderr, "afscp: %s: %s\n", dest, strerror(errno));
