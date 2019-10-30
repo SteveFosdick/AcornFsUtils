@@ -144,6 +144,7 @@ static int native_load(acorn_fs_object *obj, const char *filename)
     }
     else
         status = errno;
+    fprintf(stderr, "afscp: %s: %s\n", filename, strerror(status));
     return status;
 }
 
@@ -158,12 +159,16 @@ static int native_save(acorn_fs_object *obj, const char *filename)
     if (fp) {
         if (fwrite(obj->data, obj->length, 1, fp) == 1)
             status = write_inf(obj, filename);
-        else
+        else {
             status = errno;
+            fprintf(stderr, "afscp: %s: %s\n", filename, strerror(status));
+        }
         fclose(fp);
     }
-    else
+    else {
         status = errno;
+        fprintf(stderr, "afscp: %s: %s\n", filename, strerror(status));
+    }
     return status;
 }
 
@@ -259,7 +264,6 @@ int main(int argc, char *argv[])
     int status;
     if (argc > 2) {
         const char *dest = argv[argc-1];
-        printf("dest=%s\n", dest);
         char *sep = strchr(dest, ':');
         if (sep)
             status = acorn_dest(argc, argv, dest, sep);
