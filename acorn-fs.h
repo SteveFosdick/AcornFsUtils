@@ -18,6 +18,7 @@
 #define AFS_BUG        -5
 #define AFS_MAP_FULL   -6
 #define AFS_DIR_FULL   -7
+#define AFS_CORRUPT    -8
 
 #define AFS_ATTR_UREAD  0x0001
 #define AFS_ATTR_UWRITE 0x0002
@@ -49,6 +50,7 @@ struct acorn_fs {
     int (*walk)(acorn_fs *fs, acorn_fs_object *start, acorn_fs_cb cb, void *udata);
     int (*load)(acorn_fs *fs, acorn_fs_object *obj);
     int (*save)(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest);
+    int (*check)(acorn_fs *fs, const char *fsname, FILE *mfp);
     int (*rdsect)(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size);
     int (*wrsect)(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size);
     FILE *fp;

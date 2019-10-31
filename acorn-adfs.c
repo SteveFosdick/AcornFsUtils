@@ -9,6 +9,23 @@
 #define DIR_ENT_SIZE  0x1A
 #define DIR_FTR_SIZE  0x35
 
+typedef struct extent extent;
+
+struct extent {
+    extent   *next;
+    unsigned posn;
+    unsigned size;
+    char *name;
+};
+
+typedef struct {
+    acorn_fs *fs;
+    const char *fsname;
+    extent *head;
+    extent *tail;
+    FILE *mfp;
+} check_ctx;
+
 static inline uint32_t adfs_get32(const unsigned char *base)
 {
     return base[0] | (base[1] << 8) | (base[2] << 16) | (base[3] << 24);
@@ -37,6 +54,7 @@ static inline void adfs_put24(unsigned char *base, uint32_t value)
 static void make_root(acorn_fs_object *obj)
 {
     memset(obj, 0, sizeof(acorn_fs_object));
+    obj->name[0] = '$';
     obj->attr = AFS_ATTR_DIR;
     obj->length = 1280;
     obj->sector = 2;
@@ -309,6 +327,8 @@ static int save_fsmap(acorn_fs *fs)
 
 static unsigned sectors(unsigned bytes)
 {
+    if (!bytes)
+        return 0;
     return (bytes - 1) / ACORN_FS_SECT_SIZE + 1;
 }
 
@@ -439,4 +459,182 @@ int acorn_adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
     return status;
 }
 
+static int name_cmp(const unsigned char *a, const unsigned char *b)
+{
+    for (int c = ADFS_MAX_NAME; c; c--) {
+        int ac = *a++ & 0x5f;
+        int bc = *b++ & 0x5f;
+        if ((!ac || ac == 0x0d) && (!bc || bc == 0x0d))
+            return 0;
+        int d = ac - bc;
+        if (d)
+            return d;
+    }
+    return 0;
+}
 
+static int check_walk(check_ctx *ctx, acorn_fs_object *dir, acorn_fs_object *parent, char *path, unsigned path_len)
+{
+    int status = acorn_adfs_load(ctx->fs, dir);
+    if (status == AFS_OK) {
+        if ((status = check_dir(dir)) == AFS_OK) {
+            char *pat = dir->name;
+            unsigned char *ftr = dir->data + dir->length - DIR_FTR_SIZE;
+            unsigned char *ent = ftr + 1;
+            unsigned char *end = ent + ADFS_MAX_NAME;
+            while (ent < end) {
+                int pat_ch = *pat++ & 0x7f;
+                int ent_ch = *ent++ & 0x7f;
+                if (!pat_ch && (!ent_ch || ent_ch == 0x0d))
+                    break;
+                if (pat_ch != ent_ch) {
+                    fprintf(ctx->mfp, "%s: broken direcrory: name mismatch\n", path);
+                    status = AFS_BROKEN_DIR;
+                    break;
+                }
+            }
+            unsigned ppos = adfs_get24(ftr + 0x0b);
+            if (ppos != parent->sector) {
+                fprintf(ctx->mfp, "%s: broken direcrory: parent link incorrect\n", path);
+                status = AFS_BROKEN_DIR;
+            }
+            unsigned char *prev = NULL;
+            for (ent = dir->data + DIR_HDR_SIZE; ent < ftr; ent += DIR_ENT_SIZE) {
+                if (!*ent)
+                    break;
+                if (prev && name_cmp(ent, prev) < 0) {
+                    fprintf(ctx->mfp, "%s: broken direcrory: filenames out of order\n", path);
+                    status = AFS_BROKEN_DIR;
+                }
+                acorn_fs_object obj;
+                unsigned name_len = ent2obj(ent, &obj) + 1;
+                unsigned ent_len = path_len + name_len;
+                char *ent_path = malloc(ent_len + 2);
+                if (!ent_path) {
+                    fprintf(ctx->mfp, "%s: out of memory\n", path);
+                    return errno;
+                }
+                memcpy(ent_path, path, path_len);
+                ent_path[path_len] = '.';
+                memcpy(ent_path + path_len + 1, obj.name, name_len);
+                ent_path[ent_len+1] = 0;
+                extent *new_ext = malloc(sizeof(extent));
+                if (!new_ext) {
+                    fprintf(ctx->mfp, "%s: out of memory\n", path);
+                    return errno;
+                }
+                new_ext->posn = obj.sector;
+                new_ext->size = sectors(obj.length);
+                new_ext->name = (char *)ent_path;
+                extent *cur_ext = ctx->head;
+                if (!cur_ext || cur_ext->posn > new_ext->posn || (cur_ext->posn == new_ext->posn && cur_ext->size > new_ext->size)) {
+                    new_ext->next = cur_ext;
+                    ctx->head = new_ext;
+                }
+                else {
+                    extent *prev_ext;
+                    do {
+                        prev_ext = cur_ext;
+                        cur_ext = cur_ext->next;
+                    } while (cur_ext && (cur_ext->posn < new_ext->posn || (cur_ext->posn == new_ext->posn && cur_ext->size <= new_ext->size)));
+                    new_ext->next = cur_ext;
+                    prev_ext->next = new_ext;
+                }
+                if (obj.attr & AFS_ATTR_DIR) {
+                    int cstat = check_walk(ctx, &obj, dir, ent_path, ent_len);
+                    if (status == AFS_OK)
+                        status = cstat;
+                }
+                prev = ent;
+            }
+        }
+        else
+            fprintf(ctx->mfp, "%s: broken direcrory: Hugo/sequence\n", path);
+    }
+    else
+        fprintf(ctx->mfp, "%s: unable to load directory: %s\n", path, acorn_fs_strerr(status));
+    return status;
+}
+
+int acorn_adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
+{
+    int status = load_fsmap(fs);
+    if (status == AFS_OK) {
+        unsigned char *fsmap = fs->priv;
+        unsigned char *sizes = fsmap + 0x100;
+        int end = fsmap[0x1fe];
+        if (end == 0) {
+            fprintf(mfp, "%s: free space map empty\n", fsname);
+            status = AFS_BAD_FSMAP;
+        }
+        else {
+            extent *head = malloc(sizeof(extent));
+            if (head) {
+                extent *tail = head;
+                unsigned cur_posn = adfs_get24(fsmap);
+                unsigned cur_size = adfs_get24(sizes);
+                tail->posn = cur_posn;
+                tail->size = cur_size;
+                tail->next = NULL;
+                tail->name = "(free)";
+                for (int ent = 3; ent < end; ent += 3) {
+                    unsigned new_posn = adfs_get24(fsmap + ent);
+                    unsigned new_size = adfs_get24(sizes + ent);
+                    if (new_posn < cur_posn) {
+                        fprintf(mfp, "%s: free space map out of order at entry %d\n", fsname, ent);
+                        status = AFS_BAD_FSMAP;
+                        break;
+                    }
+                    if (cur_posn + cur_size > new_posn) {
+                        fprintf(mfp, "%s: free space map overlap at entry %d\n", fsname, ent);
+                        status = AFS_BAD_FSMAP;
+                        break;
+                    }
+                    extent *ent = malloc(sizeof(extent));
+                    if (!ent) {
+                        status = errno;
+                        break;
+                    }
+                    ent->posn = new_posn;
+                    ent->size = new_size;
+                    ent->next = NULL;
+                    ent->name = "(free)";
+                    tail->next = ent;
+                    tail = ent;
+                    cur_posn = new_posn;
+                    cur_size = new_size;
+                }
+                if (status == AFS_OK) {
+                    acorn_fs_object root;
+                    make_root(&root);
+                    check_ctx ctx;
+                    ctx.fs = fs;
+                    ctx.fsname = fsname;
+                    ctx.head = head;
+                    ctx.tail = tail;
+                    ctx.mfp = mfp;
+                    status = check_walk(&ctx, &root, &root, root.name, 1);
+                    if (status == AFS_OK) {
+                        extent *cur = ctx.head;
+                        extent *next = cur->next;
+                        while (next) {
+                            int delta = cur->posn + cur->size - next->posn;
+                            if (delta) {
+                                const char *which = delta < 0 ? "gap" : "overlap";
+                                fprintf(mfp, "%s: free/used space inconsistency: %s between %s and %s\n", fsname, which, cur->name, next->name);
+                                status = AFS_CORRUPT;
+                            }
+                            free(cur);
+                            cur = next;
+                            next = cur->next;
+                        }
+                        free(cur);
+                    }
+                }
+            }
+            else
+                status = errno;
+        }
+    }
+    return status;
+}

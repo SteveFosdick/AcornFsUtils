@@ -121,6 +121,7 @@ static void setup_adfs(acorn_fs *fs, FILE *fp, const char *filename)
     fs->walk = acorn_adfs_walk;
     fs->load = acorn_adfs_load;
     fs->save = acorn_adfs_save;
+    fs->check = acorn_adfs_check;
     fs->fp = fp;
     fs->priv = NULL;
     strcpy(fs->filename, filename);
@@ -218,7 +219,8 @@ static const char *msgs[] = {
     /* AFS_BAD_FSMAP  */ "Bad free space map",
     /* AFS_BUG        */ "Bug in Acorn FS utils",
     /* AFS_MAP_FULL   */ "Free space map full",
-    /* AFS_DIR_FULL   */ "Directory full"
+    /* AFS_DIR_FULL   */ "Directory full",
+    /* AFS_CORRUPT    */ "Filesystem is corrupt"
 };
 
 const char *acorn_fs_strerr(int status)
