@@ -556,6 +556,16 @@ static int check_walk(check_ctx *ctx, acorn_fs_object *dir, acorn_fs_object *par
     return status;
 }
 
+static const char name_free[] = "(free)";
+
+static void free_ext(extent *ext)
+{
+    fprintf(stderr, "%p:%s\n", ext, ext->name);
+    if (ext->name != name_free)
+        free(ext->name);
+    free(ext);
+}
+
 int acorn_adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
 {
     int status = load_fsmap(fs);
@@ -576,7 +586,7 @@ int acorn_adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
                 tail->posn = cur_posn;
                 tail->size = cur_size;
                 tail->next = NULL;
-                tail->name = "(free)";
+                tail->name = (char *)name_free;
                 for (int ent = 3; ent < end; ent += 3) {
                     unsigned new_posn = adfs_get24(fsmap + ent);
                     unsigned new_size = adfs_get24(sizes + ent);
@@ -598,7 +608,7 @@ int acorn_adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
                     ent->posn = new_posn;
                     ent->size = new_size;
                     ent->next = NULL;
-                    ent->name = "(free)";
+                    ent->name = (char *)name_free;
                     tail->next = ent;
                     tail = ent;
                     cur_posn = new_posn;
@@ -624,11 +634,11 @@ int acorn_adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
                                 fprintf(mfp, "%s: free/used space inconsistency: %s between %s and %s\n", fsname, which, cur->name, next->name);
                                 status = AFS_CORRUPT;
                             }
-                            free(cur);
+                            free_ext(cur);
                             cur = next;
                             next = cur->next;
                         }
-                        free(cur);
+                        free_ext(cur);
                     }
                 }
             }
