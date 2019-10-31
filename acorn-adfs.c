@@ -560,7 +560,6 @@ static const char name_free[] = "(free)";
 
 static void free_ext(extent *ext)
 {
-    fprintf(stderr, "%p:%s\n", ext, ext->name);
     if (ext->name != name_free)
         free(ext->name);
     free(ext);
