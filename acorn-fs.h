@@ -59,12 +59,16 @@ struct acorn_fs {
     char filename[1];
 };
 
+// API Functions.
 extern acorn_fs *acorn_fs_open(const char *filename, bool writable);
 extern int acorn_fs_close(acorn_fs *fs);
 extern int acorn_fs_close_all(void);
 extern const char *acorn_fs_strerr(int status);
-extern int acorn_fs_wildmat(const char *pattern, const unsigned char *candidate, size_t len, bool is_dir);
 extern void acorn_fs_free_obj(acorn_fs_object *obj);
 extern int acorn_fs_info(acorn_fs_object *obj, FILE *fp);
+
+// Internal Functions.
+extern void acorn_fs_adfs_init(acorn_fs *fs);
+extern int acorn_fs_wildmat(const char *pattern, const unsigned char *candidate, size_t len, bool is_dir);
 
 #endif

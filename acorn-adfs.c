@@ -1,8 +1,8 @@
 #include "acorn-fs.h"
-#include "acorn-adfs.h"
 #include <stdlib.h>
 #include <string.h>
 
+#define ADFS_MAX_NAME 10
 #define FSMAP_MAX_ENT 82
 #define FSMAP_SIZE    0x200
 #define DIR_HDR_SIZE  0x05
@@ -60,7 +60,7 @@ static void make_root(acorn_fs_object *obj)
     obj->sector = 2;
 }
 
-int acorn_adfs_load(acorn_fs *fs, acorn_fs_object *obj)
+static int adfs_load(acorn_fs *fs, acorn_fs_object *obj)
 {
     unsigned char *data = malloc(obj->length);
     if (data) {
@@ -114,7 +114,7 @@ static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child,
         return ENAMETOOLONG;
     if (!(parent->attr & AFS_ATTR_DIR))
         return ENOTDIR;
-    int status = acorn_adfs_load(fs, parent);
+    int status = adfs_load(fs, parent);
     if (status == AFS_OK) {
         if ((status = check_dir(parent)) == AFS_OK) {
             unsigned char *ent = parent->data;
@@ -145,7 +145,7 @@ static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child,
 }
 
 
-int acorn_adfs_find(acorn_fs *fs, const char *adfs_name, acorn_fs_object *obj)
+static int adfs_find(acorn_fs *fs, const char *adfs_name, acorn_fs_object *obj)
 {
     int status;
     const char  *ptr;
@@ -181,7 +181,7 @@ static int glob_dir(acorn_fs *fs, acorn_fs_object *dir, const char *pattern, aco
 {
     if (!*pattern)
         return AFS_OK;
-    int status = acorn_adfs_load(fs, dir);
+    int status = adfs_load(fs, dir);
     if (status == AFS_OK) {
         if ((status = check_dir(dir)) == AFS_OK) {
             unsigned char *ent = dir->data;
@@ -220,7 +220,7 @@ static int glob_dir(acorn_fs *fs, acorn_fs_object *dir, const char *pattern, aco
     return status;
 }
 
-int acorn_adfs_glob(acorn_fs *fs, acorn_fs_object *start, const char *pattern, acorn_fs_cb cb, void *udata)
+static int adfs_glob(acorn_fs *fs, acorn_fs_object *start, const char *pattern, acorn_fs_cb cb, void *udata)
 {
     char path[ACORN_FS_MAX_PATH];
     if (start)
@@ -236,7 +236,7 @@ int acorn_adfs_glob(acorn_fs *fs, acorn_fs_object *start, const char *pattern, a
 
 static int walk_dir(acorn_fs *fs, acorn_fs_object *dir, acorn_fs_cb cb, void *udata, char *path, unsigned path_posn)
 {
-    int status = acorn_adfs_load(fs, dir);
+    int status = adfs_load(fs, dir);
     if (status == AFS_OK) {
         if ((status = check_dir(dir)) == AFS_OK) {
             unsigned char *ent = dir->data;
@@ -266,7 +266,7 @@ static int walk_dir(acorn_fs *fs, acorn_fs_object *dir, acorn_fs_cb cb, void *ud
     return status;
 }
 
-int acorn_adfs_walk(acorn_fs *fs, acorn_fs_object *start, acorn_fs_cb cb, void *udata)
+static int adfs_walk(acorn_fs *fs, acorn_fs_object *start, acorn_fs_cb cb, void *udata)
 {
     char path[ACORN_FS_MAX_PATH];
     if (start)
@@ -401,10 +401,12 @@ static int dir_update(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *ch
 
     for (i = 0; i < ADFS_MAX_NAME; i++) {
         ch = child->name[i];
-        ent[i] = ch & 0x7f;
-        if (ch == 0)
+        if (!ch)
             break;
+        ent[i] = ch & 0x7f;
     }
+    while (i < ADFS_MAX_NAME)
+        ent[i++] = 0x0d;
     unsigned a = child->attr;
     if (a & AFS_ATTR_UREAD)  ent[0] |= 0x80;
     if (a & AFS_ATTR_UWRITE) ent[1] |= 0x80;
@@ -429,10 +431,10 @@ static void dir_makeslot(acorn_fs_object *parent, unsigned char *ent)
     memmove(ent + DIR_ENT_SIZE, ent, bytes);
 }
 
-int acorn_adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
+static int adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
 {
     int status;
-    acorn_fs_object parent, child;
+    acorn_fs_object child;
     unsigned char *ent;
 
     if (!(dest->attr & AFS_ATTR_DIR))
@@ -441,15 +443,15 @@ int acorn_adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
         if ((status = search(fs, dest, &child, obj->name, strlen(obj->name), &ent)) == AFS_OK) {
             if ((status = map_free(fs, &child)) == AFS_OK)
                 if ((status = alloc_write(fs, obj)) == AFS_OK)
-                    status = dir_update(fs, &parent, obj, ent);
+                    status = dir_update(fs, dest, obj, ent);
         }
         else if (status == ENOENT) {
             if (ent == NULL)
                 status = AFS_DIR_FULL;
             else {
                 if ((status = alloc_write(fs, obj)) == AFS_OK) {
-                    dir_makeslot(&parent, ent);
-                    status = dir_update(fs, &parent, obj, ent);
+                    dir_makeslot(dest, ent);
+                    status = dir_update(fs, dest, obj, ent);
                 }
             }
         }
@@ -475,7 +477,7 @@ static int name_cmp(const unsigned char *a, const unsigned char *b)
 
 static int check_walk(check_ctx *ctx, acorn_fs_object *dir, acorn_fs_object *parent, char *path, unsigned path_len)
 {
-    int status = acorn_adfs_load(ctx->fs, dir);
+    int status = adfs_load(ctx->fs, dir);
     if (status == AFS_OK) {
         if ((status = check_dir(dir)) == AFS_OK) {
             char *pat = dir->name;
@@ -565,7 +567,7 @@ static void free_ext(extent *ext)
     free(ext);
 }
 
-int acorn_adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
+static int adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
 {
     int status = load_fsmap(fs);
     if (status == AFS_OK) {
@@ -646,4 +648,14 @@ int acorn_adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
         }
     }
     return status;
+}
+
+void acorn_fs_adfs_init(acorn_fs *fs)
+{
+    fs->find = adfs_find;
+    fs->glob = adfs_glob;
+    fs->walk = adfs_walk;
+    fs->load = adfs_load;
+    fs->save = adfs_save;
+    fs->check = adfs_check;
 }

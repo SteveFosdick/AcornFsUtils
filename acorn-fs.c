@@ -1,5 +1,4 @@
 #include "acorn-fs.h"
-#include "acorn-adfs.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -114,14 +113,8 @@ static int lock_file(FILE *fp, bool writable)
 #endif
 }
 
-static void setup_adfs(acorn_fs *fs, FILE *fp, const char *filename)
+static void init_link(acorn_fs *fs, FILE *fp, const char *filename)
 {
-    fs->find = acorn_adfs_find;
-    fs->glob = acorn_adfs_glob;
-    fs->walk = acorn_adfs_walk;
-    fs->load = acorn_adfs_load;
-    fs->save = acorn_adfs_save;
-    fs->check = acorn_adfs_check;
     fs->fp = fp;
     fs->priv = NULL;
     strcpy(fs->filename, filename);
@@ -145,14 +138,16 @@ acorn_fs *acorn_fs_open(const char *filename, bool writable)
                 if ((status = check_adfs(fp, 0x200, 0x6fa, "Hugo", 5)) == AFS_OK) {
                     fs->rdsect = rdsect_simple;
                     fs->wrsect = wrsect_simple;
-                    setup_adfs(fs, fp, filename);
+                    acorn_fs_adfs_init(fs);
+                    init_link(fs, fp, filename);
                     return fs;
                 }
                 else if (status == AFS_NOT_ACORN) {
                     if ((status = check_adfs(fp, 0x400, 0xdf4, "\0H\0u\0g\0o", 10)) == AFS_OK) {
                         fs->rdsect = rdsect_ide;
                         fs->wrsect = wrsect_ide;
-                        setup_adfs(fs, fp, filename);
+                        acorn_fs_adfs_init(fs);
+                        init_link(fs, fp, filename);
                         return fs;
                     }
                 }
