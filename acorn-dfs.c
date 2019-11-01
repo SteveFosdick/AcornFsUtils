@@ -8,8 +8,6 @@ static int dfs_wildmat2(const char *pattern, const unsigned char *candidate, siz
 {
     while (len) {
         int pat_ch = *(const unsigned char *)pattern++;
-        if (!pat_ch)
-            return 1;
         if (pat_ch == '*') {
             pat_ch = *pattern;
             if (!pat_ch)
@@ -21,6 +19,8 @@ static int dfs_wildmat2(const char *pattern, const unsigned char *candidate, siz
         }
         else {
             int can_ch = *candidate++ & 0x5f;
+            if (!pat_ch)
+                return can_ch;
             if (pat_ch != '#') {
                 pat_ch &= 0x5f;
                 int d = pat_ch - can_ch;
