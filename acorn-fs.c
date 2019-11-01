@@ -249,41 +249,6 @@ const char *acorn_fs_strerr(int status)
     }
 }
 
-int acorn_fs_wildmat(const char *pattern, const unsigned char *candidate, size_t len, bool is_dir)
-{
-    while (len-- > 0) {
-        int pat_ch = *(const unsigned char *)pattern++;
-        if (pat_ch == '*') {
-            pat_ch = *pattern;
-            if (!pat_ch || (pat_ch == '.' && is_dir))
-                return 0;
-            int can_ch = *candidate & 0x7f;
-            while (can_ch && can_ch != 0x0d) {
-                if (!acorn_fs_wildmat(pattern, candidate++, len, is_dir))
-                    return 0;
-                can_ch = *candidate & 0x7f;
-            }
-            return 1;
-        }
-        else {
-            int can_ch = *candidate++ & 0x7f;
-            if (!can_ch || can_ch == 0x0d)
-                return pat_ch == '.' ? 0 : 1;
-            if (pat_ch != '#') {
-                if (pat_ch >= 'a' && pat_ch <= 'z')
-                    pat_ch = pat_ch - 'a' + 'A';
-                if (can_ch >= 'a' && can_ch <= 'z')
-                    can_ch = can_ch - 'a' + 'A';
-                int d = pat_ch - can_ch;
-                if (d)
-                    return d;
-            }
-        }
-    }
-    int can_ch = *candidate & 0x7f;
-    return can_ch && can_ch != 0x0d ? 1 : 0;
-}
-
 void acorn_fs_free_obj(acorn_fs_object *obj)
 {
     if (obj->data) {

@@ -71,6 +71,5 @@ extern int acorn_fs_info(acorn_fs_object *obj, FILE *fp);
 extern void acorn_fs_adfs_init(acorn_fs *fs);
 extern void acorn_fs_dfs_init(acorn_fs *fs);
 extern int acorn_fs_dfs_check(acorn_fs *fs, const char *fsname, FILE *mfp);
-extern int acorn_fs_wildmat(const char *pattern, const unsigned char *candidate, size_t len, bool is_dir);
 
 #endif

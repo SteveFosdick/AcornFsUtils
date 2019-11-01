@@ -108,6 +108,41 @@ static int ent2obj(unsigned char *ent, acorn_fs_object *obj)
     return i;
 }
 
+static int adfs_wildmat(const char *pattern, const unsigned char *candidate, size_t len, bool is_dir)
+{
+    while (len-- > 0) {
+        int pat_ch = *(const unsigned char *)pattern++;
+        if (pat_ch == '*') {
+            pat_ch = *pattern;
+            if (!pat_ch || (pat_ch == '.' && is_dir))
+                return 0;
+            int can_ch = *candidate & 0x7f;
+            while (can_ch && can_ch != 0x0d) {
+                if (!adfs_wildmat(pattern, candidate++, len, is_dir))
+                    return 0;
+                can_ch = *candidate & 0x7f;
+            }
+            return 1;
+        }
+        else {
+            int can_ch = *candidate++ & 0x7f;
+            if (!can_ch || can_ch == 0x0d)
+                return pat_ch == '.' ? 0 : 1;
+            if (pat_ch != '#') {
+                if (pat_ch >= 'a' && pat_ch <= 'z')
+                    pat_ch = pat_ch - 'a' + 'A';
+                if (can_ch >= 'a' && can_ch <= 'z')
+                    can_ch = can_ch - 'a' + 'A';
+                int d = pat_ch - can_ch;
+                if (d)
+                    return d;
+            }
+        }
+    }
+    int can_ch = *candidate & 0x7f;
+    return can_ch && can_ch != 0x0d ? 1 : 0;
+}
+
 static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child, const char *name, int name_len, unsigned char **ent_ptr)
 {
     if (name_len > ADFS_MAX_NAME)
@@ -125,7 +160,7 @@ static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child,
                     return ENOENT;
                 }
                 bool is_dir = ent[3] & 0x80;
-                int i = acorn_fs_wildmat(name, ent, name_len, is_dir);
+                int i = adfs_wildmat(name, ent, name_len, is_dir);
                 if (i < 0) {
                     *ent_ptr = ent;
                     return ENOENT;
@@ -192,7 +227,7 @@ static int glob_dir(acorn_fs *fs, acorn_fs_object *dir, const char *pattern, aco
                 if (!*ent)
                     break;
                 bool is_dir = ent[3] & 0x80;
-                int i = acorn_fs_wildmat(pattern, ent, mat_len, is_dir);
+                int i = adfs_wildmat(pattern, ent, mat_len, is_dir);
                 if (i < 0)
                     break;
                 if (i == 0) {
