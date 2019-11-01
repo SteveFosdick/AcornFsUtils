@@ -140,17 +140,19 @@ static unsigned sectors(unsigned bytes)
     return (bytes - 1) / ACORN_FS_SECT_SIZE + 1;
 }
 
-static void obj2ent(acorn_fs_object *obj, unsigned ssect, unsigned char *ent)
+static void obj2ent(acorn_fs_object *obj, char *name, int dfs_dir, unsigned ssect, unsigned char *ent)
 {
-    ent[7] = obj->name[0];
+    if (obj->attr & AFS_ATTR_LOCKED)
+        dfs_dir |= 0x80;
+    ent[7] = dfs_dir;
     int i;
-    for (i = 0; i < 6; i++) {
-        int ch = obj->name[i];
+    for (i = 0; i < 7; i++) {
+        int ch = name[i];
         if (!ch)
             break;
         ent[i] = ch;
     }
-    while (i < 6)
+    while (i < 7)
         ent[i++] = ' ';
     ent[0x100] = obj->load_addr;
     ent[0x101] = obj->load_addr >> 8;
@@ -165,11 +167,14 @@ static void obj2ent(acorn_fs_object *obj, unsigned ssect, unsigned char *ent)
 static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
 {
     int dfs_dir = '$';
-    int pat_ch0 = obj->name[0];
+    char *name = obj->name;
+    int pat_ch0 = name[0];
     if (!pat_ch0)
         return EINVAL;
-    if (obj->name[1] == '.')
+    if (obj->name[1] == '.') {
         dfs_dir = pat_ch0;
+        name += 2;
+    }
     unsigned char *dir = fs->priv;
     unsigned char *fde = dir + 8;
     unsigned char *ent = fde;
@@ -178,8 +183,8 @@ static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
     while (ent < end) {
         if (dfs_dir == (ent[7] & 0x7f)) {
             found = true;
-            for (int i = 0; i < 6; i++) {
-                int pat_ch = obj->name[i];
+            for (int i = 0; i < 7; i++) {
+                int pat_ch = name[i];
                 int ent_ch = ent[i];
                 if (!pat_ch && ent_ch == ' ')
                     break;
@@ -189,6 +194,8 @@ static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
                 }
             }
         }
+        if (found)
+            break;
         ent += 8;
     }
     unsigned reqd_sect = sectors(obj->length);
@@ -200,7 +207,7 @@ static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
             unsigned ssect = ((ent[0x106] & 0x03) << 8) | ent[0x107];
             int status = fs->wrsect(fs, ssect, obj->data, obj->length);
             if (status == AFS_OK) {
-                obj2ent(obj, ssect, ent);
+                obj2ent(obj, name, dfs_dir, ssect, ent);
                 status = fs->wrsect(fs, 0, dir, 0x200);
             }
             return status;
@@ -216,10 +223,12 @@ static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
         return ENOSPC;
     int status = fs->wrsect(fs, used_sect, obj->data, obj->length);
     if (status == AFS_OK) {
-        memmove(fde, fde + 8, ent-fde);
+        unsigned bytes = ent-fde;
+        memmove(fde + 8, fde, bytes);
+        memmove(fde + 0x108, fde + 0x100, bytes);
         if (!found)
             dir[0x105] += 8;
-        obj2ent(obj, used_sect, fde);
+        obj2ent(obj, name, dfs_dir, used_sect, fde);
         status = fs->wrsect(fs, 0, dir, 0x200);
     }
     return status;
