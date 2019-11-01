@@ -6,35 +6,31 @@
 
 static int dfs_wildmat2(const char *pattern, const unsigned char *candidate, size_t len)
 {
-    while (len-- > 0) {
+    while (len) {
         int pat_ch = *(const unsigned char *)pattern++;
+        if (!pat_ch)
+            return 1;
         if (pat_ch == '*') {
             pat_ch = *pattern;
             if (!pat_ch)
                 return 0;
-            int can_ch = *candidate & 0x7f;
-            while (can_ch && can_ch != ' ') {
-                if (!dfs_wildmat2(pattern, candidate++, len))
+            while (len)
+                if (!dfs_wildmat2(pattern, candidate++, len--))
                     return 0;
-                can_ch = *candidate & 0x7f;
-            }
             return 1;
         }
         else {
-            int can_ch = *candidate++ & 0x7f;
-            if (!can_ch || can_ch == ' ')
-                return pat_ch == '.' ? 0 : 1;
+            int can_ch = *candidate++ & 0x5f;
             if (pat_ch != '#') {
                 pat_ch &= 0x5f;
-                can_ch &= 0x5f;
                 int d = pat_ch - can_ch;
                 if (d)
                     return d;
             }
+            len--;
         }
     }
-    int can_ch = *candidate & 0x7f;
-    return can_ch && can_ch != ' ' ? 1 : 0;
+    return *pattern;
 }
 
 static int dfs_wildmat(const char *pattern, const unsigned char *candidate)
@@ -44,10 +40,10 @@ static int dfs_wildmat(const char *pattern, const unsigned char *candidate)
         int pat_ch1 = pattern[1];
         if (pat_ch1 == '.') {
             if (pat_ch0 == '*' || pat_ch1 == '#' || pat_ch0 == (candidate[7] & 0x7f))
-                return dfs_wildmat2(pattern, candidate, 6);
+                return dfs_wildmat2(pattern, candidate, 7);
         }
         else if ((candidate[7] & 0x7f) == '$')
-            return dfs_wildmat2(pattern, candidate, 6);
+            return dfs_wildmat2(pattern, candidate, 7);
     }
     return ENOENT;
 }
@@ -57,7 +53,7 @@ static void ent2obj(const unsigned char *ent, acorn_fs_object *obj)
     obj->name[0] = ent[7] & 0x7f;
     obj->name[1] = '.';
     int i;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < 7; i++) {
         int ch = ent[i];
         if (!ch || ch == ' ')
             break;
