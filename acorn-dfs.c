@@ -70,7 +70,7 @@ static void ent2obj(const unsigned char *ent, acorn_fs_object *obj)
     ub = b6 & 0xc0;
     obj->exec_addr = ent[0x102] | (ent[0x103] << 8) | ((ub == 0xc0) ? 0xffff0000 : (ub << 10));
     obj->length = ent[0x104] | (ent[0x105] << 8) | ((b6 & 0x30) << 12);
-    obj->sector = ((b6 & 0x03) << 16) | ent[0x107];
+    obj->sector = ((b6 & 0x03) << 8) | ent[0x107];
     obj->data = NULL;
 }
 
@@ -160,7 +160,7 @@ static void obj2ent(acorn_fs_object *obj, char *name, int dfs_dir, unsigned ssec
     ent[0x103] = obj->exec_addr >> 8;
     ent[0x104] = obj->length;
     ent[0x105] = obj->length >> 8;
-    ent[0x106] = ((obj->exec_addr & 0x0003000) >> 10) | ((obj->length & 0x0003000) >> 12) | ((obj->load_addr & 0x0003000) >> 14) | ((ssect & 0x0003000) >> 16);
+    ent[0x106] = ((obj->exec_addr & 0x00030000) >> 10) | ((obj->length & 0x00030000) >> 12) | ((obj->load_addr & 0x00030000) >> 14) | ((ssect & 0x00000300) >> 8);
     ent[0x107] = ssect;
 }
 
