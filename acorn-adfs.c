@@ -110,43 +110,42 @@ static int ent2obj(unsigned char *ent, acorn_fs_object *obj)
 
 static int adfs_wildmat(const char *pattern, const unsigned char *candidate, size_t len, bool is_dir)
 {
-    while (len-- > 0) {
+    while (len) {
         int pat_ch = *(const unsigned char *)pattern++;
         if (pat_ch == '*') {
             pat_ch = *pattern;
-            if (!pat_ch || (pat_ch == '.' && is_dir))
+            if (!pat_ch)
                 return 0;
-            int can_ch = *candidate & 0x7f;
-            while (can_ch && can_ch != 0x0d) {
-                if (!adfs_wildmat(pattern, candidate++, len, is_dir))
+            if (pat_ch == '.')
+                return is_dir ? 0 : 1;
+            while (len) {
+                if ((*candidate & 0x7f) == 0x0d)
+                    return 1;
+                if (!adfs_wildmat(pattern, candidate++, len--, is_dir))
                     return 0;
-                can_ch = *candidate & 0x7f;
             }
             return 1;
         }
         else {
-            int can_ch = *candidate++ & 0x7f;
+            int can_ch = *candidate++ & 0x5f;
+            if (!pat_ch)
+                return (!can_ch || can_ch == 0x0d) ? 0 : 1;
             if (!can_ch || can_ch == 0x0d)
                 return pat_ch == '.' ? 0 : 1;
             if (pat_ch != '#') {
-                if (pat_ch >= 'a' && pat_ch <= 'z')
-                    pat_ch = pat_ch - 'a' + 'A';
-                if (can_ch >= 'a' && can_ch <= 'z')
-                    can_ch = can_ch - 'a' + 'A';
+                pat_ch &= 0x5f;
                 int d = pat_ch - can_ch;
                 if (d)
                     return d;
             }
+            len--;
         }
     }
-    int can_ch = *candidate & 0x7f;
-    return can_ch && can_ch != 0x0d ? 1 : 0;
+    return 0;
 }
 
-static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child, const char *name, int name_len, unsigned char **ent_ptr)
+static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child, const char *name, unsigned char **ent_ptr)
 {
-    if (name_len > ADFS_MAX_NAME)
-        return ENAMETOOLONG;
     if (!(parent->attr & AFS_ATTR_DIR))
         return ENOTDIR;
     int status = adfs_load(fs, parent);
@@ -160,7 +159,7 @@ static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child,
                     return ENOENT;
                 }
                 bool is_dir = ent[3] & 0x80;
-                int i = adfs_wildmat(name, ent, name_len, is_dir);
+                int i = adfs_wildmat(name, ent, ADFS_MAX_NAME, is_dir);
                 if (i < 0) {
                     *ent_ptr = ent;
                     return ENOENT;
@@ -198,7 +197,7 @@ static int adfs_find(acorn_fs *fs, const char *adfs_name, acorn_fs_object *obj)
     parent = &a;
     child  = &b;
     while ((ptr = strchr(adfs_name, '.'))) {
-        if ((status = search(fs, parent, child, adfs_name, ptr - adfs_name, &ent)) != AFS_OK) {
+        if ((status = search(fs, parent, child, adfs_name, &ent)) != AFS_OK) {
             acorn_fs_free_obj(parent);
             return status;
         }
@@ -207,7 +206,7 @@ static int adfs_find(acorn_fs *fs, const char *adfs_name, acorn_fs_object *obj)
         child = temp;
         adfs_name = ptr + 1;
     }
-    status = search(fs, parent, obj, adfs_name, strlen(adfs_name), &ent);
+    status = search(fs, parent, obj, adfs_name, &ent);
     acorn_fs_free_obj(parent);
     return status;
 }
@@ -222,12 +221,11 @@ static int glob_dir(acorn_fs *fs, acorn_fs_object *dir, const char *pattern, aco
             unsigned char *ent = dir->data;
             unsigned char *end = ent + dir->length - DIR_FTR_SIZE;
             char *sep = strchr(pattern, '.');
-            unsigned mat_len = sep ? sep - pattern + 1 : strlen(pattern);
             for (ent += DIR_HDR_SIZE; ent < end; ent += DIR_ENT_SIZE) {
                 if (!*ent)
                     break;
                 bool is_dir = ent[3] & 0x80;
-                int i = adfs_wildmat(pattern, ent, mat_len, is_dir);
+                int i = adfs_wildmat(pattern, ent, ADFS_MAX_NAME, is_dir);
                 if (i < 0)
                     break;
                 if (i == 0) {
@@ -475,7 +473,7 @@ static int adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
     if (!(dest->attr & AFS_ATTR_DIR))
         status = ENOTDIR;
     else if ((status = load_fsmap(fs)) == AFS_OK) {
-        if ((status = search(fs, dest, &child, obj->name, strlen(obj->name), &ent)) == AFS_OK) {
+        if ((status = search(fs, dest, &child, obj->name, &ent)) == AFS_OK) {
             if ((status = map_free(fs, &child)) == AFS_OK)
                 if ((status = alloc_write(fs, obj)) == AFS_OK)
                     status = dir_update(fs, dest, obj, ent);
