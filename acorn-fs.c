@@ -149,23 +149,23 @@ acorn_fs *acorn_fs_open(const char *filename, bool writable)
                         init_link(fs, fp, filename);
                         return fs;
                     }
-                    else if (status == AFS_NOT_ACORN) {
-                        unsigned char *dir = malloc(0x200);
-                        if (dir) {
-                            if (fseek(fp, 0L, SEEK_SET) == 0) {
-                                if (fread(dir, 0x200, 1, fp) == 1) {
-                                    fs->priv = dir;
-                                    if (acorn_fs_dfs_check(fs, NULL, NULL) == AFS_OK) {
-                                        fs->rdsect = rdsect_simple;
-                                        fs->wrsect = wrsect_simple;
-                                        acorn_fs_dfs_init(fs);
-                                        init_link(fs, fp, filename);
-                                        return fs;
-                                    }
+                }
+                if (status == AFS_NOT_ACORN || status == AFS_BAD_EOF) {
+                    unsigned char *dir = malloc(0x200);
+                    if (dir) {
+                        if (fseek(fp, 0L, SEEK_SET) == 0) {
+                            if (fread(dir, 0x200, 1, fp) == 1) {
+                                fs->priv = dir;
+                                if (acorn_fs_dfs_check(fs, NULL, NULL) == AFS_OK) {
+                                    fs->rdsect = rdsect_simple;
+                                    fs->wrsect = wrsect_simple;
+                                    acorn_fs_dfs_init(fs);
+                                    init_link(fs, fp, filename);
+                                    return fs;
                                 }
-                                else if (!ferror(fp))
-                                    errno = AFS_BAD_EOF;
                             }
+                            else if (!ferror(fp))
+                                errno = AFS_BAD_EOF;
                         }
                     }
                 }
