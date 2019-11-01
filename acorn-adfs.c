@@ -658,4 +658,5 @@ void acorn_fs_adfs_init(acorn_fs *fs)
     fs->load = adfs_load;
     fs->save = adfs_save;
     fs->check = adfs_check;
+    fs->priv = NULL;
 }

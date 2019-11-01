@@ -2,18 +2,16 @@ CXX      = g++
 CXXFLAGS = -g -Wall
 CFLAGS	= -g -Wall
 
-all: afsls afstree afscp afschk test-fs test-find
+LIB_MODULES = acorn-fs.o acorn-adfs.o acorn-dfs.o
 
-afsls: afsls.o  acorn-fs.o acorn-adfs.o
+all: afsls afstree afscp afschk
 
-afstree: afstree.o acorn-fs.o acorn-adfs.o
+afsls: afsls.o $(LIB_MODULES)
 
-afscp: afscp.o acorn-fs.o acorn-adfs.o
+afstree: afstree.o $(LIB_MODULES)
 
-afschk: afschk.o  acorn-fs.o acorn-adfs.o
+afscp: afscp.o $(LIB_MODULES)
 
-test-fs: test-fs.o acorn-fs.o acorn-adfs.o
+afschk: afschk.o  $(LIB_MODULES)
 
-test-find: test-find.o acorn-fs.o acorn-adfs.o
-
-acorn-fs.o acorn-adfs.o: acorn-fs.h acorn-fs.c
+*.o: acorn-fs.h
