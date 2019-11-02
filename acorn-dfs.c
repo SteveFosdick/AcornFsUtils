@@ -177,15 +177,15 @@ static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
     }
     unsigned char *dir = fs->priv;
     unsigned char *fde = dir + 8;
-    unsigned char *ent = fde;
     unsigned char *end = fde + dir[0x105];
+    unsigned char *name_ent = fde;
     bool found = false;
-    while (ent < end) {
-        if (dfs_dir == (ent[7] & 0x7f)) {
+    while (name_ent < end) {
+        if (dfs_dir == (name_ent[7] & 0x7f)) {
             found = true;
             for (int i = 0; i < 7; i++) {
                 int pat_ch = name[i];
-                int ent_ch = ent[i];
+                int ent_ch = name_ent[i];
                 if (!pat_ch && ent_ch == ' ')
                     break;
                 if ((pat_ch & 0x5f) != (ent_ch & 0x5f)) {
@@ -196,39 +196,57 @@ static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
         }
         if (found)
             break;
-        ent += 8;
+        name_ent += 8;
     }
     unsigned reqd_sect = sectors(obj->length);
+    unsigned start_sect = 2;
+    unsigned char *space_ent = NULL;
     if (found) {
         // Existing dir entry found - is the space allocation big enough?
-        unsigned elen = ((ent[0x106] & 0x30) << 4) | ent[0x104] | (ent[0x105] << 8);
-        if (reqd_sect <= sectors(elen)) {
+        unsigned cur_len = ((name_ent[0x106] & 0x30) << 4) | name_ent[0x104] | (name_ent[0x105] << 8);
+        if (reqd_sect <= sectors(cur_len)) {
             // It fits.
-            unsigned ssect = ((ent[0x106] & 0x03) << 8) | ent[0x107];
-            int status = fs->wrsect(fs, ssect, obj->data, obj->length);
-            if (status == AFS_OK) {
-                obj2ent(obj, name, dfs_dir, ssect, ent);
-                status = fs->wrsect(fs, 0, dir, 0x200);
-            }
-            return status;
+            space_ent = name_ent;
+            start_sect = ((name_ent[0x106] & 0x03) << 8) | name_ent[0x107];
         }
     }
     else if (end >= (dir + 0x100))
         return AFS_DIR_FULL;
-    unsigned tot_sect = ((dir[0x106] & 0x03) << 8) | dir[0x107];
-    unsigned last_start = ((fde[0x106] & 0x03) << 8) | fde[0x107];
-    unsigned last_len = ((fde[0x106] & 0x30) << 4) | fde[0x104] | (fde[0x105] << 8);
-    unsigned used_sect = last_start + sectors(last_len);
-    if (reqd_sect > (tot_sect - used_sect))
+    if (!space_ent) {
+        // Work backwards looking for a suitable space.
+        space_ent = end;
+        while (space_ent > fde) {
+            space_ent -= 8;
+            unsigned this_start = ((space_ent[0x106] & 0x03) << 8) | space_ent[0x107];
+            if ((this_start - start_sect) >= reqd_sect) {
+                space_ent += 8;
+                break;
+            }
+            unsigned this_len = ((space_ent[0x106] & 0x30) << 4) | space_ent[0x104] | (space_ent[0x105] << 8);
+            start_sect = this_start + sectors(this_len);
+        }
+    }
+    unsigned avail_sect = (((dir[0x106] & 0x03) << 8) | dir[0x107]) - 2;
+    if (reqd_sect > (avail_sect - start_sect))
         return ENOSPC;
-    int status = fs->wrsect(fs, used_sect, obj->data, obj->length);
+    int status = fs->wrsect(fs, start_sect, obj->data, obj->length);
     if (status == AFS_OK) {
-        unsigned bytes = ent-fde;
-        memmove(fde + 8, fde, bytes);
-        memmove(fde + 0x108, fde + 0x100, bytes);
+        if (space_ent != name_ent) {
+            if (name_ent > space_ent) {
+                unsigned bytes = name_ent - space_ent;
+                memmove(space_ent + 8, space_ent, bytes);
+                memmove(space_ent + 0x108, space_ent + 0x100, bytes);
+            }
+            else {
+                space_ent -= 8;
+                unsigned bytes = space_ent - name_ent;
+                memmove(name_ent, name_ent + 8, bytes);
+                memmove(name_ent + 0x100, name_ent + 0x108, bytes);
+            }
+        }
+        obj2ent(obj, name, dfs_dir, start_sect, space_ent);
         if (!found)
             dir[0x105] += 8;
-        obj2ent(obj, name, dfs_dir, used_sect, fde);
         status = fs->wrsect(fs, 0, dir, 0x200);
     }
     return status;
