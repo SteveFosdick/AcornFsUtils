@@ -229,7 +229,7 @@ static int acorn_src(acorn_fs *fs, acorn_fs_object *obj, void *udata, const char
 
 static int copy_loop(int argc, char **argv, acorn_ctx *ctx)
 {
-    int status = 9;
+    int status = 0;
     for (argc -= 2; argc; argc--) {
         int astat;
         char *item = *++argv;
@@ -241,12 +241,18 @@ static int copy_loop(int argc, char **argv, acorn_ctx *ctx)
                 ctx->src_fsname = item;
                 astat = fs->glob(fs, NULL, sep, acorn_src, ctx);
             }
+            else {
+                astat = errno;
+                fprintf(stderr, "afscp: %s: %s\n", item, acorn_fs_strerr(astat));
+            }
         }
         else {
             struct stat stb;
             if (!stat(item, &stb)) {
-                if (S_ISDIR(stb.st_mode))
+                if (S_ISDIR(stb.st_mode)) {
                     fprintf(stderr, "afscp: skipping directory %s\n", item);
+                    astat = AFS_OK;
+                }
                 else {
                     acorn_fs_object obj;
                     astat = native_load(&obj, item);

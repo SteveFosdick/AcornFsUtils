@@ -1,6 +1,6 @@
 CXX      = g++
 CXXFLAGS = -g -Wall
-CFLAGS	= -g -Wall
+CFLAGS	= -O2 -Wall
 
 LIB_MODULES = acorn-fs.o acorn-adfs.o acorn-dfs.o
 
