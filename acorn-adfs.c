@@ -612,9 +612,10 @@ static int adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
             status = AFS_BAD_FSMAP;
         }
         else {
-            extent *head = malloc(sizeof(extent));
-            if (head) {
-                extent *tail = head;
+            extent *tail = malloc(sizeof(extent));
+            if (tail) {
+                check_ctx ctx;
+                ctx.head = tail;
                 unsigned cur_posn = adfs_get24(fsmap);
                 unsigned cur_size = adfs_get24(sizes);
                 tail->posn = cur_posn;
@@ -651,10 +652,8 @@ static int adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
                 if (status == AFS_OK) {
                     acorn_fs_object root;
                     make_root(&root);
-                    check_ctx ctx;
                     ctx.fs = fs;
                     ctx.fsname = fsname;
-                    ctx.head = head;
                     ctx.tail = tail;
                     ctx.mfp = mfp;
                     status = check_walk(&ctx, &root, &root, root.name, 1);
