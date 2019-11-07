@@ -523,14 +523,14 @@ static int check_walk(check_ctx *ctx, acorn_fs_object *dir, acorn_fs_object *par
                 if (!pat_ch && (!ent_ch || ent_ch == 0x0d))
                     break;
                 if (pat_ch != ent_ch) {
-                    fprintf(ctx->mfp, "%s: broken direcrory: name mismatch\n", path);
+                    fprintf(ctx->mfp, "%s:%s: broken direcrory: name mismatch\n", ctx->fsname, path);
                     status = AFS_BROKEN_DIR;
                     break;
                 }
             }
             unsigned ppos = adfs_get24(ftr + 0x0b);
             if (ppos != parent->sector) {
-                fprintf(ctx->mfp, "%s: broken direcrory: parent link incorrect\n", path);
+                fprintf(ctx->mfp, "%s:%s: broken direcrory: parent link incorrect\n", ctx->fsname, path);
                 status = AFS_BROKEN_DIR;
             }
             unsigned char *prev = NULL;
@@ -538,7 +538,7 @@ static int check_walk(check_ctx *ctx, acorn_fs_object *dir, acorn_fs_object *par
                 if (!*ent)
                     break;
                 if (prev && name_cmp(ent, prev) < 0) {
-                    fprintf(ctx->mfp, "%s: broken direcrory: filenames out of order\n", path);
+                    fprintf(ctx->mfp, "%s:%s: broken direcrory: filenames out of order\n", ctx->fsname, path);
                     status = AFS_BROKEN_DIR;
                 }
                 acorn_fs_object obj;
@@ -546,7 +546,7 @@ static int check_walk(check_ctx *ctx, acorn_fs_object *dir, acorn_fs_object *par
                 unsigned ent_len = path_len + name_len;
                 char *ent_path = malloc(ent_len + 2);
                 if (!ent_path) {
-                    fprintf(ctx->mfp, "%s: out of memory\n", path);
+                    fprintf(ctx->mfp, "%s:%s: out of memory\n", ctx->fsname, path);
                     return errno;
                 }
                 memcpy(ent_path, path, path_len);
@@ -555,7 +555,7 @@ static int check_walk(check_ctx *ctx, acorn_fs_object *dir, acorn_fs_object *par
                 ent_path[ent_len+1] = 0;
                 extent *new_ext = malloc(sizeof(extent));
                 if (!new_ext) {
-                    fprintf(ctx->mfp, "%s: out of memory\n", path);
+                    fprintf(ctx->mfp, "%s:%s: out of memory\n", ctx->fsname, path);
                     return errno;
                 }
                 new_ext->posn = obj.sector;
@@ -584,10 +584,10 @@ static int check_walk(check_ctx *ctx, acorn_fs_object *dir, acorn_fs_object *par
             }
         }
         else
-            fprintf(ctx->mfp, "%s: broken direcrory: Hugo/sequence\n", path);
+            fprintf(ctx->mfp, "%s:%s: broken direcrory: Hugo/sequence\n", ctx->fsname, path);
     }
     else
-        fprintf(ctx->mfp, "%s: unable to load directory: %s\n", path, acorn_fs_strerr(status));
+        fprintf(ctx->mfp, "%s:%s: unable to load directory: %s\n", ctx->fsname, path, acorn_fs_strerr(status));
     return status;
 }
 
