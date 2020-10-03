@@ -468,9 +468,9 @@ static int dir_update(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *ch
     if (a & AFS_ATTR_OWRITE) ent[6] |= 0x80;
     if (a & AFS_ATTR_OEXEC)  ent[7] |= 0x80;
     if (a & AFS_ATTR_PRIV)   ent[8] |= 0x80;
-    adfs_put24(ent + 0x0a, child->load_addr);
-    adfs_put24(ent + 0x0e, child->exec_addr);
-    adfs_put24(ent + 0x12, child->length);
+    adfs_put32(ent + 0x0a, child->load_addr);
+    adfs_put32(ent + 0x0e, child->exec_addr);
+    adfs_put32(ent + 0x12, child->length);
     adfs_put24(ent + 0x16, child->sector);
     return fs->wrsect(fs, parent->sector, parent->data, parent->length);
 }
