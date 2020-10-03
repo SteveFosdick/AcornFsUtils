@@ -89,6 +89,50 @@ static int wrsect_ide(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size
     return AFS_OK;
 }
 
+static int interleaved(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size, int sect_per_track, size_t (*callback)())
+{
+    while (size > ACORN_FS_SECT_SIZE) {
+        int track = ssect / sect_per_track;
+        int sector = ssect % sect_per_track;
+        if (fseek(fs->fp, ((track * sect_per_track * 2) + sector) * ACORN_FS_SECT_SIZE, SEEK_SET))
+            return errno;
+        if (callback(buf, ACORN_FS_SECT_SIZE, 1, fs->fp) != 1)
+            return ferror(fs->fp) ? errno : AFS_BAD_EOF;
+        ssect++;
+        buf += ACORN_FS_SECT_SIZE;
+        size -= ACORN_FS_SECT_SIZE;
+    }
+    if (size > 0) {
+        int track = ssect / sect_per_track;
+        int sector = ssect % sect_per_track;
+        if (fseek(fs->fp, ((track * sect_per_track * 2) + sector) * ACORN_FS_SECT_SIZE, SEEK_SET))
+            return errno;
+        if (callback(buf, size, 1, fs->fp) != 1)
+            return ferror(fs->fp) ? errno : AFS_BAD_EOF;
+    }
+    return AFS_OK;
+}
+
+static int rdsect_ileave16(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size)
+{
+    return interleaved(fs, ssect, buf, size, 16, fread);
+}
+
+static int wrsect_ileave16(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size)
+{
+    return interleaved(fs, ssect, buf, size, 16, fwrite);
+}
+
+static int rdsect_ileave10(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size)
+{
+    return interleaved(fs, ssect, buf, size, 10, fread);
+}
+
+static int wrsect_ileave10(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size)
+{
+    return interleaved(fs, ssect, buf, size, 10, fwrite);
+}
+
 static int lock_file(FILE *fp, bool writable)
 {
 #ifdef WIN32
@@ -135,8 +179,15 @@ acorn_fs *acorn_fs_open(const char *filename, bool writable)
             int status = lock_file(fp, writable);
             if (status == AFS_OK) {
                 if ((status = check_adfs(fp, 0x200, 0x6fa, "Hugo", 5)) == AFS_OK) {
-                    fs->rdsect = rdsect_simple;
-                    fs->wrsect = wrsect_simple;
+                    const char *ext = strrchr(filename, '.');
+                    if (ext && !strcasecmp(ext, ".adl")) {
+                        fs->rdsect = rdsect_ileave16;
+                        fs->wrsect = wrsect_ileave16;
+                    }
+                    else {
+                        fs->rdsect = rdsect_simple;
+                        fs->wrsect = wrsect_simple;
+                    }
                     acorn_fs_adfs_init(fs);
                     init_link(fs, fp, filename);
                     return fs;
@@ -157,8 +208,15 @@ acorn_fs *acorn_fs_open(const char *filename, bool writable)
                             if (fread(dir, 0x200, 1, fp) == 1) {
                                 fs->priv = dir;
                                 if (acorn_fs_dfs_check(fs, NULL, NULL) == AFS_OK) {
-                                    fs->rdsect = rdsect_simple;
-                                    fs->wrsect = wrsect_simple;
+                                    const char *ext = strrchr(filename, '.');
+                                    if (ext && !strcasecmp(ext, ".dsd")) {
+                                        fs->rdsect = rdsect_ileave10;
+                                        fs->wrsect = wrsect_ileave10;
+                                    }
+                                    else {
+                                        fs->rdsect = rdsect_simple;
+                                        fs->wrsect = wrsect_simple;
+                                    }
                                     acorn_fs_dfs_init(fs);
                                     init_link(fs, fp, filename);
                                     return fs;
