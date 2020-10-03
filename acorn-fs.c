@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef WIN32
+#include <fcntl.h>
+#endif
+
 static acorn_fs *open_list;
 
 static int check_adfs(FILE *fp, unsigned off1, unsigned off2, const char *pattern, size_t len)
@@ -145,8 +149,6 @@ static int lock_file(FILE *fp, bool writable)
 #ifdef WIN32
     return AFS_OK
 #else
-#include <fcntl.h>
-
     struct flock fl;
     int fd = fileno(fp);
 
