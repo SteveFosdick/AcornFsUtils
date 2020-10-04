@@ -213,6 +213,21 @@ static int adfs_find(acorn_fs *fs, const char *adfs_name, acorn_fs_object *obj)
     return status;
 }
 
+static int adfs_settitle(acorn_fs *fs, const char *title)
+{
+    // In ADFS the title is 19 characters located at offset 0xD9
+    // of the last sector in the root directory.
+    unsigned char buffer[ACORN_FS_SECT_SIZE];
+    acorn_fs_object root;
+    make_root(&root);
+    int ssect = root.sector + root.length / ACORN_FS_SECT_SIZE - 1;
+    fs->rdsect(fs, ssect, buffer, ACORN_FS_SECT_SIZE);
+    for (int i = 0; i < 19; i++) {
+        buffer[0xD9 + i] = (i < strlen(title)) ? title[i] : 0x0D;
+    }
+    return fs->wrsect(fs, ssect, buffer, ACORN_FS_SECT_SIZE);
+}
+
 static int glob_dir(acorn_fs *fs, acorn_fs_object *dir, const char *pattern, acorn_fs_cb cb, void *udata, char *path, unsigned path_posn)
 {
     if (!*pattern)
@@ -694,4 +709,5 @@ void acorn_fs_adfs_init(acorn_fs *fs)
     fs->save = adfs_save;
     fs->check = adfs_check;
     fs->priv = NULL;
+    fs->settitle = adfs_settitle;
 }

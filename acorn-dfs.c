@@ -89,6 +89,22 @@ static int dfs_find(acorn_fs *fs, const char *dfs_name, acorn_fs_object *obj)
     return ENOENT;
 }
 
+static int dfs_settitle(acorn_fs *fs, const char *title)
+{
+    // In DFS the title is 12 character, written to:
+    // Sector 0, bytes 0..7
+    // Sector 1, bytes 0..3
+    // Padding is typically spaces
+    unsigned char *dir = fs->priv;
+    for (int i = 0; i < 12; i++) {
+        char c = (i < strlen(title)) ? title[i] : ' ';
+        int di = (i > 8) ? 0x100 + i - 8 : i;
+        // Update the directory
+        dir[di] = c;
+    }
+    return fs->wrsect(fs, 0, dir, 0x200);
+}
+
 static int dfs_glob(acorn_fs *fs, acorn_fs_object *start, const char *pattern, acorn_fs_cb cb, void *udata)
 {
     unsigned char *dir = fs->priv;
@@ -297,4 +313,5 @@ void acorn_fs_dfs_init(acorn_fs *fs)
     fs->load  = dfs_load;
     fs->save  = dfs_save;
     fs->check = acorn_fs_dfs_check;
+    fs->settitle = dfs_settitle;
 }
