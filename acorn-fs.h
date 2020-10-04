@@ -53,6 +53,7 @@ struct acorn_fs {
     int (*check)(acorn_fs *fs, const char *fsname, FILE *mfp);
     int (*rdsect)(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size);
     int (*wrsect)(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size);
+    int (*settitle)(acorn_fs *fs, const char *title);
     FILE *fp;
     void *priv;
     acorn_fs *next;
