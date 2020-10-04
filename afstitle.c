@@ -8,7 +8,7 @@ int main(int argc, char *argv[])
         acorn_fs *fs = acorn_fs_open(fsname, true);
         if (fs) {
             const char *title = *++argv;
-            int astat = fs->title(fs, title);
+            int astat = fs->settitle(fs, title);
             if (astat != AFS_OK) {
                 status++;
             }
