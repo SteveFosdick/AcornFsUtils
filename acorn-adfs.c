@@ -430,16 +430,17 @@ static int alloc_write(acorn_fs *fs, acorn_fs_object *obj)
 
 static int dir_update(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child, unsigned char *ent)
 {
-    int i, ch;
-
-    for (i = 0; i < ADFS_MAX_NAME; i++) {
-        ch = child->name[i];
+    int e = 0, o = 0;
+    if (child->name[0] && child->name[1] == '.')
+        o += 2; // Discard DFS directory.
+    while (o < ADFS_MAX_NAME) {
+        int ch = child->name[o++] & 0x7f;
         if (!ch)
             break;
-        ent[i] = ch & 0x7f;
+        ent[e++] = ch;
     }
-    while (i < ADFS_MAX_NAME)
-        ent[i++] = 0x0d;
+    while (e < ADFS_MAX_NAME)
+        ent[e++] = 0x0d;
     unsigned a = child->attr;
     if (a & AFS_ATTR_UREAD)  ent[0] |= 0x80;
     if (a & AFS_ATTR_UWRITE) ent[1] |= 0x80;
