@@ -116,7 +116,7 @@ static int interleaved(acorn_fs *fs, int ssect, unsigned char *buf, unsigned siz
         size -= ACORN_FS_SECT_SIZE;
     }
     if (size > 0) {
-        if (ileave_seek(fs, ssect, sect_per_track))
+        if  (ileave_seek(fs, ssect, sect_per_track))
             return errno;
         if (callback(buf, size, 1, fs->fp) != 1)
             return ferror(fs->fp) ? errno : AFS_BAD_EOF;
@@ -240,6 +240,7 @@ acorn_fs *acorn_fs_open(const char *filename, bool writable)
             fclose(fp);
             errno = status;
         }
+        free(fs);
     }
     return NULL;
 }

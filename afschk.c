@@ -12,6 +12,10 @@ int main(int argc, char *argv[])
                 if (astat != AFS_OK)
                     status++;
             }
+            else {
+                fprintf(stderr, "afschk: unable to open image file %s: %s\n", fsname, acorn_fs_strerr(errno));
+                status++;
+            }
         }
         acorn_fs_close_all();
         return status;
