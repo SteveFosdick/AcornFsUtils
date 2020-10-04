@@ -190,6 +190,8 @@ static int save_file(acorn_fs_object *obj, acorn_ctx *ctx)
         // Acorn destination.
         if (!ctx->dst_isdir)
             strncpy(obj->name, ctx->dst_objname, ACORN_FS_MAX_NAME);
+        if (!(obj->attr & (AFS_ATTR_UREAD|AFS_ATTR_UWRITE|AFS_ATTR_UEXEC|AFS_ATTR_OREAD|AFS_ATTR_OWRITE|AFS_ATTR_OEXEC)))
+            obj->attr |= AFS_ATTR_UREAD|AFS_ATTR_UWRITE;
         status = ctx->dst_fs->save(ctx->dst_fs, obj, ctx->dst_obj);
         if (status != AFS_OK) {
             if (ctx->dst_isdir)
