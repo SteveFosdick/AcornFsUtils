@@ -153,6 +153,8 @@ static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child,
         if ((status = check_dir(parent)) == AFS_OK) {
             unsigned char *ent = parent->data;
             unsigned char *end = ent + parent->length;
+            if (name[0] && name[1] == '.')
+                name += 2; // discard DFS directory.
             for (ent += DIR_HDR_SIZE; ent < end; ent += DIR_ENT_SIZE) {
                 if (*ent == 0) {
                     *ent_ptr = ent;
