@@ -89,12 +89,21 @@ static int wrsect_ide(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size
     return AFS_OK;
 }
 
+static int ileave_seek(acorn_fs *fs, int ssect, int sect_per_track)
+{
+    int track = ssect / sect_per_track;
+    int sector = ssect % sect_per_track;
+    if (track >= 80)
+        sector +=  (((track - 80) * 2 + 1) * sect_per_track);
+    else
+        sector += track * 2 * sect_per_track;
+    return fseek(fs->fp, sector * ACORN_FS_SECT_SIZE, SEEK_SET);
+}
+
 static int interleaved(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size, int sect_per_track, size_t (*callback)())
 {
     while (size > ACORN_FS_SECT_SIZE) {
-        int track = ssect / sect_per_track;
-        int sector = ssect % sect_per_track;
-        if (fseek(fs->fp, ((track * sect_per_track * 2) + sector) * ACORN_FS_SECT_SIZE, SEEK_SET))
+        if (ileave_seek(fs, ssect, sect_per_track))
             return errno;
         if (callback(buf, ACORN_FS_SECT_SIZE, 1, fs->fp) != 1)
             return ferror(fs->fp) ? errno : AFS_BAD_EOF;
@@ -103,9 +112,7 @@ static int interleaved(acorn_fs *fs, int ssect, unsigned char *buf, unsigned siz
         size -= ACORN_FS_SECT_SIZE;
     }
     if (size > 0) {
-        int track = ssect / sect_per_track;
-        int sector = ssect % sect_per_track;
-        if (fseek(fs->fp, ((track * sect_per_track * 2) + sector) * ACORN_FS_SECT_SIZE, SEEK_SET))
+        if (ileave_seek(fs, ssect, sect_per_track))
             return errno;
         if (callback(buf, size, 1, fs->fp) != 1)
             return ferror(fs->fp) ? errno : AFS_BAD_EOF;
