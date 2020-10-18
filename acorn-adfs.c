@@ -127,13 +127,16 @@ static int adfs_wildmat(const char *pattern, const unsigned char *candidate, siz
             return 1;
         }
         else {
-            int can_ch = *candidate++ & 0x5f;
+            int can_ch = *candidate++ & 0x7f;
             if (!pat_ch)
                 return (!can_ch || can_ch == 0x0d) ? 0 : 1;
             if (!can_ch || can_ch == 0x0d)
                 return pat_ch == '.' ? 0 : 1;
             if (pat_ch != '#') {
-                pat_ch &= 0x5f;
+                if (pat_ch >= 'a' && pat_ch <= 'z')
+                    pat_ch &= 0x5f;
+                if (can_ch >= 'a' && can_ch <= 'z')
+                    can_ch &= 0x5f;
                 int d = pat_ch - can_ch;
                 if (d)
                     return d;
