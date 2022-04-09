@@ -703,12 +703,66 @@ static int adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
     return status;
 }
 
+
+static int adfs_mkdir(acorn_fs *fs, const char *name, acorn_fs_object *dest)
+{
+    int status;
+    acorn_fs_object child;
+    unsigned char *ent;
+
+    // Create empty directory data
+    unsigned char empty_data[1280];
+    memset(empty_data, 0, sizeof(empty_data));
+    strcpy((char *)empty_data + 0x001, "Hugo");
+    strcpy((char *)empty_data + 0x4FB, "Hugo");
+
+    // Create an empty directory acorn_fs_object
+    acorn_fs_object empty_obj;
+    memset(&empty_obj, 0, sizeof(empty_obj));
+    int i;
+    for (i = 0; i < strlen(name); i++) {
+        empty_obj.name[i] = name[i] & 0x7f;
+    }
+    for (; i < ADFS_MAX_NAME; i++) {
+        empty_obj.name[i] = 0x0d;
+    }
+    empty_obj.load_addr = 0;
+    empty_obj.exec_addr = 0;
+    empty_obj.length = 1280;
+    empty_obj.attr = AFS_ATTR_DIR | AFS_ATTR_LOCKED | AFS_ATTR_UREAD;
+    empty_obj.data = empty_data;
+
+    // Save the new directory
+    //
+    // I wanted to re-use adfs_save here, but mkdir needs to fail if an object
+    // with the same name already exists, where-as adfs_save will overwrite it
+    if (!(dest->attr & AFS_ATTR_DIR)) {
+        status = ENOTDIR;
+    } else if ((status = load_fsmap(fs)) == AFS_OK) {
+        if ((status = search(fs, dest, &child, name, &ent)) == AFS_OK) {
+            status = EEXIST;
+        } else if (status == ENOENT) {
+            if (ent == NULL)
+                status = AFS_DIR_FULL;
+            else if ((status = alloc_write(fs, &empty_obj)) == AFS_OK) {
+                dir_makeslot(dest, ent);
+                status = dir_update(fs, dest, &empty_obj, ent);
+            }
+        }
+        if (status == AFS_OK) {
+            status = save_fsmap(fs);
+        }
+    }
+    return status;
+}
+
 void acorn_fs_adfs_init(acorn_fs *fs)
 {
     fs->find = adfs_find;
     fs->glob = adfs_glob;
     fs->walk = adfs_walk;
     fs->load = adfs_load;
+    fs->mkdir = adfs_mkdir;
     fs->save = adfs_save;
     fs->check = adfs_check;
     fs->priv = NULL;

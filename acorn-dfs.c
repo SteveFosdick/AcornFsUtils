@@ -305,12 +305,18 @@ int acorn_fs_dfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
     return AFS_OK;
 }
 
+static int dfs_mkdir(acorn_fs *fs, const char *name, acorn_fs_object *dest)
+{
+    return ENOSYS;
+}
+
 void acorn_fs_dfs_init(acorn_fs *fs)
 {
     fs->find  = dfs_find;
     fs->glob  = dfs_glob;
     fs->walk  = dfs_walk;
     fs->load  = dfs_load;
+    fs->mkdir = dfs_mkdir;
     fs->save  = dfs_save;
     fs->check = acorn_fs_dfs_check;
     fs->settitle = dfs_settitle;
