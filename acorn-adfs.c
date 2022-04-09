@@ -719,13 +719,7 @@ static int adfs_mkdir(acorn_fs *fs, const char *name, acorn_fs_object *dest)
     // Create an empty directory acorn_fs_object
     acorn_fs_object empty_obj;
     memset(&empty_obj, 0, sizeof(empty_obj));
-    int i;
-    for (i = 0; i < strlen(name); i++) {
-        empty_obj.name[i] = name[i] & 0x7f;
-    }
-    for (; i < ADFS_MAX_NAME; i++) {
-        empty_obj.name[i] = 0x0d;
-    }
+    strncpy(empty_obj.name, name, ACORN_FS_MAX_NAME);
     empty_obj.load_addr = 0;
     empty_obj.exec_addr = 0;
     empty_obj.length = 1280;
