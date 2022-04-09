@@ -54,6 +54,12 @@ static int acorn_mkdir(const char *fsname, char *dir_path)
     return status;
 }
 
+static inline void strlcpy(char *dest, const char *src, size_t len)
+{
+	strncpy(dest, src, --len);
+	dest[len] = 0;
+}
+
 int main(int argc, char *argv[])
 {
     int status = 0;
@@ -63,7 +69,7 @@ int main(int argc, char *argv[])
         while (argc >= 2) {
             int ret;
             char *item = *++argv;
-            strncpy(orig_path, item, sizeof(orig_path));
+            strlcpy(orig_path, item, sizeof(orig_path));
             char *sep = strchr(item, ':');
             if (sep) {
                 *sep++ = 0;
