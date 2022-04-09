@@ -403,19 +403,19 @@ static int map_free(acorn_fs *fs, acorn_fs_object *obj)
             return AFS_OK;
         }
         if (posn > obj->sector) {
-            if (end >= 82)
+            if (end >= FSMAP_MAX_ENT * 3)
                 return AFS_MAP_FULL;
-            bytes = (end - ent) * 3;
+            bytes = end - ent;
             memmove(fsmap + ent + 3, fsmap + ent, bytes);
             memmove(sizes + ent + 3, sizes + ent, bytes);
             break;
         }
     }
-    if (end >= 82)
+    if (end >= FSMAP_MAX_ENT * 3)
         return AFS_MAP_FULL;
     adfs_put24(fsmap + ent, obj->sector);
     adfs_put24(sizes + ent, obj_size);
-    fsmap[0x1fe]++;
+    fsmap[0x1fe] += 3;
     return AFS_OK;
 }
 
@@ -434,10 +434,10 @@ static int alloc_write(acorn_fs *fs, acorn_fs_object *obj)
             posn = adfs_get24(fsmap + ent);
             obj->sector = posn;
             if (size == obj_size) { // uses exact space so kill entry.
-                bytes = (end - ent) * 3;
+                bytes = end - ent;
                 memmove(fsmap + ent, fsmap + ent + 3, bytes);
                 memmove(sizes + ent, sizes + ent + 3, bytes);
-                fsmap[0x1fe]--;
+                fsmap[0x1fe] -= 3;
             } else {
                 adfs_put24(fsmap + ent, posn + obj_size);
                 adfs_put24(sizes + ent, size - obj_size);
