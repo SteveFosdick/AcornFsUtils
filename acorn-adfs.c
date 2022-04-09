@@ -715,6 +715,21 @@ static int adfs_mkdir(acorn_fs *fs, const char *name, acorn_fs_object *dest)
     memset(empty_data, 0, sizeof(empty_data));
     strcpy((char *)empty_data + 0x001, "Hugo");
     strcpy((char *)empty_data + 0x4FB, "Hugo");
+    // Populate the directory footer.
+    unsigned char *dname = empty_data + 0x4cc;
+    unsigned char *title = empty_data + 0x4d9;
+    for (int i = 0; i < ACORN_FS_MAX_NAME; ++i) {
+		int ch = name[i];
+		if (!ch) {
+			dname[i] = 0x0d;
+			title[i] = 0x0d;
+			break;
+		}
+		ch &= 0x7f;
+		dname[i] = ch; // directory name.
+		title[i] = ch; // directory title.
+	}
+    adfs_put24(empty_data+0x4d6, dest->sector); // Uplink to parent.
 
     // Create an empty directory acorn_fs_object
     acorn_fs_object empty_obj;
