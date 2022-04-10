@@ -221,14 +221,55 @@ static int save_file(acorn_fs_object *obj, acorn_ctx *ctx)
 static int acorn_src(acorn_fs *fs, acorn_fs_object *obj, void *udata, const char *path)
 {
     acorn_ctx *ctx = udata;
+    int astat;
     if (obj->attr & AFS_ATTR_DIR) {
-        fprintf(stderr, "afscp: skipping directory %s:%s\n", ctx->src_fsname, path);
-        return AFS_OK;
+		if (ctx->recurse) {
+			if (ctx->dst_fs) {
+				/* Destination is an Acorn filesystem */
+				acorn_fs_object child;
+				memcpy(child.name, obj->name, ACORN_FS_MAX_NAME);
+				astat = ctx->dst_fs->mkdir(ctx->dst_fs, &child, ctx->dst_obj);
+				if (astat == AFS_OK || (astat == EEXIST && (child.attr & AFS_ATTR_DIR))) {
+					acorn_ctx cctx = *ctx;
+					cctx.dst_objname = obj->name;
+					cctx.dst_obj = &child;
+					astat = fs->glob(fs, obj, "*", acorn_src, &cctx);
+				}
+				else
+					fprintf(stderr, "afscp: unable to create Acorn directory %s: %s\n", child.name, acorn_fs_strerr(astat));
+			}
+			else {
+				/* Destination is the native filesystem */
+				size_t plen = strlen(ctx->dst_objname);
+				size_t nlen = strlen(obj->name);
+				char *cpath = alloca(plen+nlen+2);
+				memcpy(cpath, ctx->dst_objname, plen);
+				cpath[plen] = '/';
+				name_a2n(obj->name, cpath+plen+1);
+				printf("native destination, path=%s, cpath=%s\n", path, cpath);
+				struct stat stb;
+				if ((!stat(cpath, &stb) && S_ISDIR(stb.st_mode)) || !mkdir(cpath, 0755)) {
+					acorn_ctx cctx = *ctx;
+					cctx.dst_objname = cpath;
+					astat = fs->glob(fs, obj, "*", acorn_src, &cctx);
+				}
+				else {
+					astat = errno;
+					fprintf(stderr, "afscp: unable to create native directory %s: %s\n", cpath, strerror(astat));
+				}
+			}	
+		}
+		else {
+			fprintf(stderr, "afscp: skipping directory %s:%s\n", ctx->src_fsname, path);
+			astat = AFS_OK;
+		}
     }
-    int status = fs->load(fs, obj);
-    if (status == AFS_OK)
-        status = save_file(obj, ctx);
-    return status;
+    else {
+		astat = fs->load(fs, obj);
+		if (astat == AFS_OK)
+			astat = save_file(obj, ctx);
+	}
+    return astat;
 }
 
 static int native_dir(const char *path, acorn_ctx *ctx);
