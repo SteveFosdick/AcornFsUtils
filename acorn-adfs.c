@@ -331,11 +331,6 @@ static int adfs_walk(acorn_fs *fs, acorn_fs_object *start, acorn_fs_cb cb, void 
     }
 }
 
-static int adfs_remove(acorn_fs *fs, acorn_fs_object *start, const char *pattern)
-{
-	return ENOSYS;
-}
-
 static uint8_t checksum(uint8_t *base)
 {
     int i = 255, c = 0;
@@ -516,6 +511,70 @@ static int adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
         }
         if (status == AFS_OK)
             status = save_fsmap(fs);
+    }
+    return status;
+}
+
+static int remove_loop(acorn_fs *fs, acorn_fs_object *dir, const char *pattern)
+{
+    if (!*pattern)
+        return AFS_OK;
+    int status = adfs_load(fs, dir);
+    if (status == AFS_OK) {
+        if ((status = check_dir(dir)) == AFS_OK) {
+            unsigned char *ent = dir->data;
+            unsigned char *end = ent + dir->length - DIR_FTR_SIZE;
+            ent += DIR_HDR_SIZE;
+            while (ent < end) {
+                if (!*ent)
+                    break;
+                bool is_dir = ent[3] & 0x80;
+                int i = adfs_wildmat(pattern, ent, ADFS_MAX_NAME, is_dir);
+                if (i < 0)
+                    break;
+                if (i == 0) {
+					acorn_fs_object  obj;
+					ent2obj(ent, &obj);
+					if (is_dir) {
+						/* For a directory, remove the contents first. */
+						if ((status = remove_loop(fs, &obj, "*")) != AFS_OK)
+							break;
+					}
+					// Return the space to the free space map.
+					if ((status = map_free(fs, &obj)) != AFS_OK)
+						break;
+					// Close the space in the directory.
+					size_t bytes = (end - ent) - DIR_ENT_SIZE;
+					memmove(ent, ent + DIR_ENT_SIZE, bytes);
+					// Terminate the list of directory entries.
+					ent[bytes] = 0;
+				}
+				else
+					ent += DIR_ENT_SIZE;
+            }
+            if (status == AFS_OK) {
+				if ((status = fs->wrsect(fs, dir->sector, dir->data, dir->length)) == AFS_OK)
+					status = save_fsmap(fs);
+			}
+        }
+        acorn_fs_free_obj(dir);
+    }
+    return status;
+}
+
+static int adfs_remove(acorn_fs *fs, acorn_fs_object *start, const char *pattern)
+{
+	int status = load_fsmap(fs);
+	if (status == AFS_OK) {
+		if (start)
+			status = remove_loop(fs, start, pattern);
+		else {
+			acorn_fs_object root;
+			make_root(&root);
+			if (pattern[0] == '$' && pattern[1] == '.')
+				pattern += 2;
+			status = remove_loop(fs, &root, pattern);
+		}
     }
     return status;
 }

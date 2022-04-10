@@ -19,6 +19,7 @@
 #define AFS_MAP_FULL   -6
 #define AFS_DIR_FULL   -7
 #define AFS_CORRUPT    -8
+#define AFS_REMOVED    -9
 
 #define AFS_ATTR_UREAD  0x0001
 #define AFS_ATTR_UWRITE 0x0002

@@ -301,7 +301,8 @@ static const char *msgs[] = {
     /* AFS_BUG        */ "Bug in Acorn FS utils",
     /* AFS_MAP_FULL   */ "Free space map full",
     /* AFS_DIR_FULL   */ "Directory full",
-    /* AFS_CORRUPT    */ "Filesystem is corrupt"
+    /* AFS_CORRUPT    */ "Filesystem is corrupt",
+    /* AFS_REMOVED    */ "Directory entry removed"
 };
 
 const char *acorn_fs_strerr(int status)
