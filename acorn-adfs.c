@@ -704,10 +704,9 @@ static int adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
 }
 
 
-static int adfs_mkdir(acorn_fs *fs, const char *name, acorn_fs_object *dest)
+static int adfs_mkdir(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
 {
     int status;
-    acorn_fs_object child;
     unsigned char *ent;
 
     // Create empty directory data
@@ -719,7 +718,7 @@ static int adfs_mkdir(acorn_fs *fs, const char *name, acorn_fs_object *dest)
     unsigned char *dname = empty_data + 0x4cc;
     unsigned char *title = empty_data + 0x4d9;
     for (int i = 0; i < ACORN_FS_MAX_NAME; ++i) {
-		int ch = name[i];
+		int ch = obj->name[i];
 		if (!ch) {
 			dname[i] = 0x0d;
 			title[i] = 0x0d;
@@ -732,14 +731,11 @@ static int adfs_mkdir(acorn_fs *fs, const char *name, acorn_fs_object *dest)
     adfs_put24(empty_data+0x4d6, dest->sector); // Uplink to parent.
 
     // Create an empty directory acorn_fs_object
-    acorn_fs_object empty_obj;
-    memset(&empty_obj, 0, sizeof(empty_obj));
-    strncpy(empty_obj.name, name, ACORN_FS_MAX_NAME);
-    empty_obj.load_addr = 0;
-    empty_obj.exec_addr = 0;
-    empty_obj.length = 1280;
-    empty_obj.attr = AFS_ATTR_DIR | AFS_ATTR_LOCKED | AFS_ATTR_UREAD;
-    empty_obj.data = empty_data;
+    obj->load_addr = 0;
+    obj->exec_addr = 0;
+    obj->length = 1280;
+    obj->attr = AFS_ATTR_DIR | AFS_ATTR_LOCKED | AFS_ATTR_UREAD;
+    obj->data = empty_data;
 
     // Save the new directory
     //
@@ -748,14 +744,14 @@ static int adfs_mkdir(acorn_fs *fs, const char *name, acorn_fs_object *dest)
     if (!(dest->attr & AFS_ATTR_DIR)) {
         status = ENOTDIR;
     } else if ((status = load_fsmap(fs)) == AFS_OK) {
-        if ((status = search(fs, dest, &child, name, &ent)) == AFS_OK) {
+        if ((status = search(fs, dest, obj, obj->name, &ent)) == AFS_OK) {
             status = EEXIST;
         } else if (status == ENOENT) {
             if (ent == NULL)
                 status = AFS_DIR_FULL;
-            else if ((status = alloc_write(fs, &empty_obj)) == AFS_OK) {
+            else if ((status = alloc_write(fs, obj)) == AFS_OK) {
                 dir_makeslot(dest, ent);
-                status = dir_update(fs, dest, &empty_obj, ent);
+                status = dir_update(fs, dest, obj, ent);
             }
         }
         if (status == AFS_OK) {

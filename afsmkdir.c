@@ -47,7 +47,9 @@ static int acorn_mkdir(const char *fsname, char *dir_path)
     acorn_fs_object dobj;
     int status = fs->find(fs, dest, &dobj);
     if (status == AFS_OK && dobj.attr & AFS_ATTR_DIR) {
-        status = fs->mkdir(fs, name, &dobj);
+		acorn_fs_object child;
+		strncpy(child.name, name, ACORN_FS_MAX_NAME);
+        status = fs->mkdir(fs, &child, &dobj);
     }
 
     acorn_fs_close_all();

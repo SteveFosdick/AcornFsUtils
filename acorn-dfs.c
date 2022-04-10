@@ -305,7 +305,7 @@ int acorn_fs_dfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
     return AFS_OK;
 }
 
-static int dfs_mkdir(acorn_fs *fs, const char *name, acorn_fs_object *dest)
+static int dfs_mkdir(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
 {
     return ENOSYS;
 }
