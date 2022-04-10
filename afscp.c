@@ -336,6 +336,13 @@ static int native_src(const char *path, const char *name, acorn_ctx *ctx)
 	return astat;
 }
 
+static bool is_inf(const char *path)
+{
+    const char *ptr = strrchr(path, '.');
+    // we know if ptr is not NULL, ptr[0] is a dot, no need to test.
+    return ptr && (ptr[1] == 'I' || ptr[1] == 'i') && (ptr[2] == 'N' || ptr[2] == 'n') && (ptr[3] == 'F' || ptr[3] == 'f') && !ptr[4];
+}
+
 static int native_dir(const char *path, acorn_ctx *ctx)
 {
 	int astat;
@@ -350,7 +357,7 @@ static int native_dir(const char *path, acorn_ctx *ctx)
 			cpath[plen] = '/';
 			struct dirent *dp;
 			while ((dp = readdir(dir))) {
-				if (dp->d_name[0] != '.') {
+				if (dp->d_name[0] != '.' && !is_inf(dp->d_name)) {
 					size_t reqd = plen + strlen(dp->d_name) + 2;
 					if (reqd > nlen) {
 						char *npath = realloc(cpath, reqd);
