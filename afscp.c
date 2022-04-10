@@ -246,7 +246,6 @@ static int acorn_src(acorn_fs *fs, acorn_fs_object *obj, void *udata, const char
 				memcpy(cpath, ctx->dst_objname, plen);
 				cpath[plen] = '/';
 				name_a2n(obj->name, cpath+plen+1);
-				printf("native destination, path=%s, cpath=%s\n", path, cpath);
 				struct stat stb;
 				if ((!stat(cpath, &stb) && S_ISDIR(stb.st_mode)) || !mkdir(cpath, 0755)) {
 					acorn_ctx cctx = *ctx;
@@ -304,7 +303,6 @@ static int native_src(const char *path, const char *name, acorn_ctx *ctx)
 					memcpy(cpath, ctx->dst_objname, plen);
 					cpath[plen] = '/';
 					strcpy(cpath+plen+1, name);
-					printf("native destination, path=%s, cpath=%s\n", path, cpath);
 					struct stat stb;
 					if ((!stat(cpath, &stb) && S_ISDIR(stb.st_mode)) || !mkdir(cpath, 0755)) {
 						acorn_ctx cctx = *ctx;
