@@ -139,6 +139,29 @@ static int dfs_walk(acorn_fs *fs, acorn_fs_object *start, acorn_fs_cb cb, void *
     return AFS_OK;
 }
 
+static int dfs_remove(acorn_fs *fs, acorn_fs_object *start, const char *pattern)
+{
+    unsigned char *dir = fs->priv;
+    unsigned char *ent = dir + 8;
+    unsigned char *end = ent + dir[0x105];
+    bool dirty = false;
+    while (ent < end) {
+        if (!dfs_wildmat(pattern, ent)) {
+			/* removing, close the gap */
+			size_t bytes = (end - ent) - 8;
+			memmove(ent, ent+8, bytes); // names.
+			ent[bytes] = 0;
+			memmove(ent+0x100, ent+0x108, bytes); // other details.
+			/* adjust the total */
+			dir[0x105] -= 8;
+			dirty = true;
+		}
+		else
+			ent += 8;
+    }
+    return dirty ? fs->wrsect(fs, 0, dir, 0x200) : AFS_OK;
+}
+
 static int dfs_load(acorn_fs *fs, acorn_fs_object *obj)
 {
     unsigned char *data = malloc(obj->length);
@@ -315,6 +338,7 @@ void acorn_fs_dfs_init(acorn_fs *fs)
     fs->find  = dfs_find;
     fs->glob  = dfs_glob;
     fs->walk  = dfs_walk;
+    fs->remove = dfs_remove;
     fs->load  = dfs_load;
     fs->mkdir = dfs_mkdir;
     fs->save  = dfs_save;

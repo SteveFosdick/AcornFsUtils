@@ -331,6 +331,11 @@ static int adfs_walk(acorn_fs *fs, acorn_fs_object *start, acorn_fs_cb cb, void 
     }
 }
 
+static int adfs_remove(acorn_fs *fs, acorn_fs_object *start, const char *pattern)
+{
+	return ENOSYS;
+}
+
 static uint8_t checksum(uint8_t *base)
 {
     int i = 255, c = 0;
@@ -766,6 +771,7 @@ void acorn_fs_adfs_init(acorn_fs *fs)
     fs->find = adfs_find;
     fs->glob = adfs_glob;
     fs->walk = adfs_walk;
+    fs->remove = adfs_remove;
     fs->load = adfs_load;
     fs->mkdir = adfs_mkdir;
     fs->save = adfs_save;
