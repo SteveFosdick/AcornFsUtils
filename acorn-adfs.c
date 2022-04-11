@@ -159,23 +159,19 @@ static int search(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *child,
             if (name[0] && name[1] == '.')
                 name += 2; // discard DFS directory.
             for (ent += DIR_HDR_SIZE; ent < end; ent += DIR_ENT_SIZE) {
-                if (*ent == 0) {
-                    *ent_ptr = ent;
-                    return ENOENT;
-                }
+                if (*ent == 0)
+                    break;
                 bool is_dir = ent[3] & 0x80;
                 int i = adfs_wildmat(name, ent, ADFS_MAX_NAME, is_dir);
-                if (i < 0) {
-                    *ent_ptr = ent;
-                    return ENOENT;
-                }
                 if (i == 0) {
                     ent2obj(ent, child);
                     *ent_ptr = ent;
                     return AFS_OK;
                 }
+                if (i < 0)
+                    break;
             }
-            *ent_ptr = NULL;
+            *ent_ptr = ent;
             return ENOENT;
         }
         acorn_fs_free_obj(parent);
@@ -478,11 +474,19 @@ static int dir_update(acorn_fs *fs, acorn_fs_object *parent, acorn_fs_object *ch
     return fs->wrsect(fs, parent->sector, parent->data, parent->length);
 }
 
-static void dir_makeslot(acorn_fs_object *parent, unsigned char *ent)
+static int dir_makeslot(acorn_fs_object *parent, unsigned char *ent)
 {
-    unsigned char *ftr = parent->data + parent->length - DIR_FTR_SIZE;
-    unsigned bytes = ftr - ent - DIR_ENT_SIZE;
-    memmove(ent + DIR_ENT_SIZE, ent, bytes);
+    if (ent) {
+        unsigned char *ftr = parent->data + parent->length - DIR_FTR_SIZE;
+        for (unsigned char *ptr = ent; ptr < ftr; ptr += DIR_ENT_SIZE) {
+            if (!*ptr) {
+                /* Found an empty slot before the end. */   
+                memmove(ent + DIR_ENT_SIZE, ent, ptr-ent+1);
+                return AFS_OK;
+            }
+        }
+    }
+    return AFS_DIR_FULL;
 }
 
 static int adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
@@ -500,17 +504,13 @@ static int adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
                     status = dir_update(fs, dest, obj, ent);
         }
         else if (status == ENOENT) {
-            if (ent == NULL)
-                status = AFS_DIR_FULL;
-            else {
-                if ((status = alloc_write(fs, obj)) == AFS_OK) {
-                    dir_makeslot(dest, ent);
+            if ((status = dir_makeslot(dest, ent)) == AFS_OK)
+                if ((status = alloc_write(fs, obj)) == AFS_OK)
                     status = dir_update(fs, dest, obj, ent);
-                }
-            }
         }
         if (status == AFS_OK)
             status = save_fsmap(fs);
+        acorn_fs_free_obj(dest);
     }
     return status;
 }
@@ -718,16 +718,16 @@ static int adfs_mkdir(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
     unsigned char *dname = empty_data + 0x4cc;
     unsigned char *title = empty_data + 0x4d9;
     for (int i = 0; i < ACORN_FS_MAX_NAME; ++i) {
-		int ch = obj->name[i];
-		if (!ch) {
-			dname[i] = 0x0d;
-			title[i] = 0x0d;
-			break;
-		}
-		ch &= 0x7f;
-		dname[i] = ch; // directory name.
-		title[i] = ch; // directory title.
-	}
+        int ch = obj->name[i];
+        if (!ch) {
+            dname[i] = 0x0d;
+            title[i] = 0x0d;
+            break;
+        }
+        ch &= 0x7f;
+        dname[i] = ch; // directory name.
+        title[i] = ch; // directory title.
+    }
     adfs_put24(empty_data+0x4d6, dest->sector); // Uplink to parent.
 
     // Create an empty directory acorn_fs_object
