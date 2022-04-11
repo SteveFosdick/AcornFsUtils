@@ -194,7 +194,7 @@ static int save_file(acorn_fs_object *obj, acorn_ctx *ctx)
             strncpy(obj->name, ctx->dst_objname, ACORN_FS_MAX_NAME);
         if (!(obj->attr & (AFS_ATTR_UREAD|AFS_ATTR_UWRITE|AFS_ATTR_UEXEC|AFS_ATTR_OREAD|AFS_ATTR_OWRITE|AFS_ATTR_OEXEC)))
             obj->attr |= AFS_ATTR_UREAD|AFS_ATTR_UWRITE;
-        status = ctx->dst_fs->save(ctx->dst_fs, obj, ctx->dst_obj);
+        status = ctx->dst_fs->save(ctx->dst_fs, obj, ctx->dst_obj, true);
         if (status != AFS_OK) {
             if (ctx->dst_isdir)
                 fprintf(stderr, "afscp: %s:%s.%s: %s\n", ctx->dst_fsname, ctx->dst_objname, obj->name, acorn_fs_strerr(status));
@@ -405,7 +405,7 @@ static int copy_loop(int argc, char **argv, acorn_ctx *ctx)
             }
         }
         else {
-			const char *name = strchr(item, '/');
+			const char *name = strrchr(item, '/');
 			astat = native_src(item, name ? name+1 : item, ctx);
 		}
         if (astat != AFS_OK)

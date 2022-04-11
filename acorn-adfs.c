@@ -489,7 +489,7 @@ static int dir_makeslot(acorn_fs_object *parent, unsigned char *ent)
     return AFS_DIR_FULL;
 }
 
-static int adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
+static int adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest, bool overwrite)
 {
     int status;
     acorn_fs_object child;
@@ -499,9 +499,13 @@ static int adfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
         status = ENOTDIR;
     else if ((status = load_fsmap(fs)) == AFS_OK) {
         if ((status = search(fs, dest, &child, obj->name, &ent)) == AFS_OK) {
-            if ((status = map_free(fs, &child)) == AFS_OK)
-                if ((status = alloc_write(fs, obj)) == AFS_OK)
-                    status = dir_update(fs, dest, obj, ent);
+			if (overwrite) {
+				if ((status = map_free(fs, &child)) == AFS_OK)
+					if ((status = alloc_write(fs, obj)) == AFS_OK)
+						status = dir_update(fs, dest, obj, ent);
+			}
+			else
+				status = EEXIST;
         }
         else if (status == ENOENT) {
             if ((status = dir_makeslot(dest, ent)) == AFS_OK)
@@ -706,9 +710,6 @@ static int adfs_check(acorn_fs *fs, const char *fsname, FILE *mfp)
 
 static int adfs_mkdir(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
 {
-    int status;
-    unsigned char *ent;
-
     // Create empty directory data
     unsigned char empty_data[1280];
     memset(empty_data, 0, sizeof(empty_data));
@@ -738,26 +739,7 @@ static int adfs_mkdir(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
     obj->data = empty_data;
 
     // Save the new directory
-    //
-    // I wanted to re-use adfs_save here, but mkdir needs to fail if an object
-    // with the same name already exists, where-as adfs_save will overwrite it
-    if (!(dest->attr & AFS_ATTR_DIR)) {
-        status = ENOTDIR;
-    } else if ((status = load_fsmap(fs)) == AFS_OK) {
-        if ((status = search(fs, dest, obj, obj->name, &ent)) == AFS_OK) {
-            status = EEXIST;
-        } else if (status == ENOENT) {
-			if ((status = dir_makeslot(dest, ent)) == AFS_OK) {
-				if ((status = alloc_write(fs, obj)) == AFS_OK)
-					status = dir_update(fs, dest, obj, ent);
-            }
-        }
-        if (status == AFS_OK) {
-            status = save_fsmap(fs);
-        }
-        acorn_fs_free_obj(dest);
-    }
-    return status;
+    return adfs_save(fs, obj, dest, false);
 }
 
 void acorn_fs_adfs_init(acorn_fs *fs)
