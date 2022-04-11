@@ -747,16 +747,15 @@ static int adfs_mkdir(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
         if ((status = search(fs, dest, obj, obj->name, &ent)) == AFS_OK) {
             status = EEXIST;
         } else if (status == ENOENT) {
-            if (ent == NULL)
-                status = AFS_DIR_FULL;
-            else if ((status = alloc_write(fs, obj)) == AFS_OK) {
-                dir_makeslot(dest, ent);
-                status = dir_update(fs, dest, obj, ent);
+			if ((status = dir_makeslot(dest, ent)) == AFS_OK) {
+				if ((status = alloc_write(fs, obj)) == AFS_OK)
+					status = dir_update(fs, dest, obj, ent);
             }
         }
         if (status == AFS_OK) {
             status = save_fsmap(fs);
         }
+        acorn_fs_free_obj(dest);
     }
     return status;
 }
