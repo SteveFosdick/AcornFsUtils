@@ -51,7 +51,7 @@ struct acorn_fs {
     int (*walk)(acorn_fs *fs, acorn_fs_object *start, acorn_fs_cb cb, void *udata);
     int (*remove)(acorn_fs *fs, acorn_fs_object *start, const char *pattern);
     int (*load)(acorn_fs *fs, acorn_fs_object *obj);
-    int (*save)(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest);
+    int (*save)(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest, bool overwrite);
     int (*mkdir)(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest);
     int (*check)(acorn_fs *fs, const char *fsname, FILE *mfp);
     int (*rdsect)(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size);

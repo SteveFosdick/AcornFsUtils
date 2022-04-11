@@ -203,7 +203,7 @@ static void obj2ent(acorn_fs_object *obj, char *name, int dfs_dir, unsigned ssec
     ent[0x107] = ssect;
 }
 
-static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
+static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest, bool overwrite)
 {
     int dfs_dir = '$';
     char *name = obj->name;
@@ -241,6 +241,8 @@ static int dfs_save(acorn_fs *fs, acorn_fs_object *obj, acorn_fs_object *dest)
     unsigned start_sect = 2;
     unsigned char *space_ent = NULL;
     if (found) {
+		if (!overwrite)
+			return EEXIST;
         // Existing dir entry found - is the space allocation big enough?
         unsigned cur_len = ((name_ent[0x106] & 0x30) << 4) | name_ent[0x104] | (name_ent[0x105] << 8);
         if (reqd_sect <= sectors(cur_len)) {
