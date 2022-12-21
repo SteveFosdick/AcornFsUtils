@@ -76,6 +76,10 @@ static void ent2obj(const unsigned char *ent, acorn_fs_object *obj)
 
 static int dfs_find(acorn_fs *fs, const char *dfs_name, acorn_fs_object *obj)
 {
+	if (dfs_name[0] == '$' && !dfs_name[1]) {
+		obj->attr = AFS_ATTR_DIR;
+		return AFS_OK;
+	}
     unsigned char *dir = fs->priv;
     unsigned char *ent = dir + 8;
     unsigned char *end = ent + dir[0x105];
