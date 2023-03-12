@@ -170,7 +170,7 @@ static int native_save(acorn_fs_object *obj, const char *filename)
     int status;
     FILE *fp = fopen(filename, "wb");
     if (fp) {
-        if (fwrite(obj->data, obj->length, 1, fp) == 1)
+        if (!obj->length || fwrite(obj->data, obj->length, 1, fp) == 1)
             status = write_inf(obj, filename);
         else {
             status = errno;
