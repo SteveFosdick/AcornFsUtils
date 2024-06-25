@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
                 status++;
             }
         } while (--argc);
+        return status;
     }
     else {
         fputs("Usage: afstree <img-file[:start]> [...]\n", stderr);

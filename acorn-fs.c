@@ -104,7 +104,9 @@ static int ileave_seek(acorn_fs *fs, int ssect, int sect_per_track)
     return fseek(fs->fp, sector * ACORN_FS_SECT_SIZE, SEEK_SET);
 }
 
-static int interleaved(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size, int sect_per_track, size_t (*callback)())
+typedef size_t (*cb_type)(void *ptr, size_t size, size_t nmemb, FILE *fp);
+
+static int interleaved(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size, int sect_per_track, cb_type callback)
 {
     while (size > ACORN_FS_SECT_SIZE) {
         if (ileave_seek(fs, ssect, sect_per_track))
@@ -126,22 +128,22 @@ static int interleaved(acorn_fs *fs, int ssect, unsigned char *buf, unsigned siz
 
 static int rdsect_ileave16(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size)
 {
-    return interleaved(fs, ssect, buf, size, 16, fread);
+    return interleaved(fs, ssect, buf, size, 16, (cb_type)fread);
 }
 
 static int wrsect_ileave16(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size)
 {
-    return interleaved(fs, ssect, buf, size, 16, fwrite);
+    return interleaved(fs, ssect, buf, size, 16, (cb_type)fwrite);
 }
 
 static int rdsect_ileave10(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size)
 {
-    return interleaved(fs, ssect, buf, size, 10, fread);
+    return interleaved(fs, ssect, buf, size, 10, (cb_type)fread);
 }
 
 static int wrsect_ileave10(acorn_fs *fs, int ssect, unsigned char *buf, unsigned size)
 {
-    return interleaved(fs, ssect, buf, size, 10, fwrite);
+    return interleaved(fs, ssect, buf, size, 10, (cb_type)fwrite);
 }
 
 static int lock_file(FILE *fp, bool writable)

@@ -3,7 +3,7 @@
 int main(int argc, char *argv[])
 {
     if (--argc) {
-        int status;
+        int status = 0;
         while(argc--) {
             const char *fsname = *++argv;
             acorn_fs *fs = acorn_fs_open(fsname, false);
