@@ -48,7 +48,7 @@ static int acunzip(const char *fn)
                                 if (len >= 12) {
                                     /* Exec address */
                                     value = (data[11] << 24) | (data[10] << 16) | (data[9] << 8) | data[8];
-                                    fprintf(fp, " %08X %08lX", value, size);
+                                    fprintf(fp, " %08X %" PRIi64, value, size);
                                     if (len >= 16) {
                                         /* File attributes */
                                         value = (data[15] << 24) | (data[14] << 16) | (data[13] << 8) | data[12];
@@ -96,4 +96,5 @@ int main(int argc, char **argv)
         fputs("Usage: acunzip <zip-file> <...>\n", stderr);
         status = 1;
     }
+    return status;
 }
