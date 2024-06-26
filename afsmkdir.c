@@ -56,11 +56,15 @@ static int acorn_mkdir(const char *fsname, char *dir_path)
     return status;
 }
 
+#ifndef __APPLE__
+#ifndef __GLIBC__
 static inline void strlcpy(char *dest, const char *src, size_t len)
 {
 	strncpy(dest, src, --len);
 	dest[len] = 0;
 }
+#endif
+#endif
 
 int main(int argc, char *argv[])
 {
