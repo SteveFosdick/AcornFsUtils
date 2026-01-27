@@ -28,7 +28,7 @@ and the name after the colon is the name of a file within that disk image.
 
 **afsmkdir** <*directory*> [ <*directory*> ... ]
 
-**afstitle** <*img-file*> <*title*>
+**afstitle** <*img-file*> [ <*new_title*> ]
 
 **acunzip** <*zip-file*> <...>
 
