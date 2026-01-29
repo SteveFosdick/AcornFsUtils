@@ -93,6 +93,34 @@ static int dfs_find(acorn_fs *fs, const char *dfs_name, acorn_fs_object *obj)
     return ENOENT;
 }
 
+static int dfs_gettitle(acorn_fs *fs, char *buf, size_t len)
+{
+    /* Read root directory (2 sectors) from cached directory */
+    unsigned char *dir = fs->priv;
+    if (!dir || len == 0) return AFS_BUG;
+
+    /* Extract title from Sector 0, bytes 0..7 and Sector 1, bytes 0..3 */
+    char tmp[13];
+    for (int i = 0; i < 12; i++) {
+        int di = (i > 8) ? 0x100 + i - 8 : i;
+        tmp[i] = (char)dir[di];
+    }
+    tmp[12] = 0;
+
+    /* Find last non-padding byte (space or NUL) */
+    int end = 12;
+    while (end > 0 && (tmp[end - 1] == ' ' || tmp[end - 1] == 0))
+        end--;
+
+    /* Copy exactly 'end' bytes safely */
+    size_t n;
+    for (n = 0; (int)n < end && n + 1 < len; n++)
+        buf[n] = tmp[n];
+    buf[n] = 0;
+
+    return AFS_OK;
+}
+
 static int dfs_settitle(acorn_fs *fs, const char *title)
 {
     // In DFS the title is 12 character, written to:
@@ -350,4 +378,5 @@ void acorn_fs_dfs_init(acorn_fs *fs)
     fs->save  = dfs_save;
     fs->check = acorn_fs_dfs_check;
     fs->settitle = dfs_settitle;
+    fs->gettitle = dfs_gettitle;
 }
